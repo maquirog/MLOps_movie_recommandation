@@ -1,0 +1,24 @@
+A-Création dataset
+- créer dataset mais en prennant en compte les tags à la place des genres 
+
+B-Features
+- user matrix : aggrégation différents modes (mean, sum, tf-idf)
+- normalisation par genre pour "effacer" les genres sureprésentés?
+- normalisation par utilisateur ?
+- prendre en compte les notes pour pondération ?
+
+C-Training
+- methode de mesure de distance (cosin, euclidienne,...)
+- actuellement content based essayer collaboratif (mémoire et model)
+
+D-Prédiction
+- ca predisait que les 5 premiers users
+- ajout d'une sauvegarde dans un fichier json
+- selection 10 random number pour chaque ligne ce qui est illogique
+
+E-Evaluation
+Precision@k
+Recall@k
+Hit rate
+coverage
+Normalized Discounted Cumulative Gain (NDCG)

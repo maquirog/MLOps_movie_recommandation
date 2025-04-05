@@ -4,6 +4,7 @@ from sklearn.preprocessing import normalize
 import json
 
 
+
 def read_ratings(ratings_csv, data_dir="data/raw") -> pd.DataFrame:
     """
     Reads a ratings.csv from the data/raw folder.
