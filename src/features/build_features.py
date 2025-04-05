@@ -1,6 +1,7 @@
 import pandas as pd
 import os
-
+from sklearn.preprocessing import normalize
+import json
 
 
 def read_ratings(ratings_csv, data_dir="data/raw") -> pd.DataFrame:
@@ -51,7 +52,9 @@ def keep_only_liked_movies(ratings, min_rating = 4.0):
     """
     Keeps only the movies with a rating equal or above the threshold.
     """
-    return ratings[ratings["rating"]>=min_rating]
+    liked_ratings = ratings[ratings["rating"]>=min_rating]
+    favorite_movies_lists = liked_ratings.groupby("userId")["movieId"].apply(list)
+    return liked_ratings, favorite_movies_lists
 
 
 def filter_users_with_min_likes(ratings, min_liked_movies=5):
@@ -73,13 +76,28 @@ def create_user_matrix(ratings, movies, aggregation = "mean"):
     user_matrix = merged.groupby("userId").agg(aggregation)
     return user_matrix
 
-def save_processed_data(movies_df: pd.DataFrame, user_profiles: pd.DataFrame, output_dir="data/processed"):
+def normalize_user_matrix(user_matrix):
+    """
+    Normalize each user's profile vector to have unit norm (L2).
+    """
+    normalized_user_matrix = pd.DataFrame(
+        normalize(user_matrix, norm='l2', axis=1),
+        index=user_matrix.index,
+        columns=user_matrix.columns
+    )
+    return normalized_user_matrix
+
+def save_processed_data(movies_df, user_matrix, favorite_movies_lists, output_dir="data/processed"):
     """
     Saves the movie genre matrix and user profile matrix to CSV files.
     """
     os.makedirs(output_dir, exist_ok=True)
     movies_df.drop(columns=["title"]).to_csv(os.path.join(output_dir, "movie_matrix.csv"), index=False)
-    user_profiles.to_csv(os.path.join(output_dir, "user_matrix.csv"))
+    user_matrix.to_csv(os.path.join(output_dir, "user_matrix.csv"))
+    
+    favorite_movies_lists
+    with open(os.path.join(output_dir, "user_favorites.json"), "w") as f:
+        json.dump(favorite_movies_lists.to_dict(), f, indent=4)
     
 
 if __name__ == "__main__":
@@ -91,11 +109,11 @@ if __name__ == "__main__":
     movies = read_movies("movies.csv")
 
     # Filter and preprocess
-    liked_ratings = keep_only_liked_movies(ratings)
+    liked_ratings, favorite_movies_lists = keep_only_liked_movies(ratings)
     filtered_ratings = filter_users_with_min_likes(liked_ratings)
     
     # Create user profile matrix (average genre preference)
-    user_profiles = create_user_matrix(filtered_ratings, movies)
+    user_matrix = normalize_user_matrix(create_user_matrix(filtered_ratings, movies))
 
     # Save processed data
-    save_processed_data(movies, user_profiles)
+    save_processed_data(movies, user_matrix, favorite_movies_lists)
