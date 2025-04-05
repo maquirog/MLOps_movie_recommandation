@@ -1,6 +1,6 @@
 import pandas as pd
-from sklearn.preprocessing import LabelEncoder
 import os
+
 
 
 def read_ratings(ratings_csv, data_dir="data/raw") -> pd.DataFrame:
@@ -20,8 +20,6 @@ def read_ratings(ratings_csv, data_dir="data/raw") -> pd.DataFrame:
     """
     data = pd.read_csv(os.path.join(data_dir, ratings_csv))
 
-    temp = pd.DataFrame(LabelEncoder().fit_transform(data["movieId"]))
-    data["movieId"] = temp
     return data
 
 
@@ -49,30 +47,55 @@ def read_movies(movies_csv, data_dir="data/raw") -> pd.DataFrame:
     result_df = pd.concat([df[["movieId", "title"]], genres], axis=1)
     return result_df
 
+def keep_only_liked_movies(ratings, min_rating = 4.0):
+    """
+    Keeps only the movies with a rating equal or above the threshold.
+    """
+    return ratings[ratings["rating"]>=min_rating]
 
-def create_user_matrix(ratings, movies):
+
+def filter_users_with_min_likes(ratings, min_liked_movies=5):
+    """
+    Filters out users who liked fewer than 'min_liked_movies'.
+    """
+    liked_counts = ratings.groupby("userId").size()
+    active_users = liked_counts[liked_counts >= min_liked_movies].index
+    return ratings[ratings["userId"].isin(active_users)]
+
+
+def create_user_matrix(ratings, movies, aggregation = "mean"):
+    """
+    Builds the user profile matrix by averaging genre vectors of liked movies per user.
+    """   
     # merge the 2 tables together
-    movie_ratings = ratings.merge(movies, on="movieId", how="inner")
-
-    # Drop useless features
-    movie_ratings = movie_ratings.drop(
-        ["movieId", "timestamp", "title", "rating"], axis=1
-    )
-
-    # Calculate user_matrix
-    user_matrix = movie_ratings.groupby("userId").agg(
-        "mean",
-    )
-
+    merged = ratings.merge(movies, on="movieId", how="inner")
+    merged = merged.drop(columns=["movieId", "title", "rating", "timestamp"])
+    user_matrix = merged.groupby("userId").agg(aggregation)
     return user_matrix
 
+def save_processed_data(movies_df: pd.DataFrame, user_profiles: pd.DataFrame, output_dir="data/processed"):
+    """
+    Saves the movie genre matrix and user profile matrix to CSV files.
+    """
+    os.makedirs(output_dir, exist_ok=True)
+    movies_df.drop(columns=["title"]).to_csv(os.path.join(output_dir, "movie_matrix.csv"), index=False)
+    user_profiles.to_csv(os.path.join(output_dir, "user_matrix.csv"))
+    
 
 if __name__ == "__main__":
-
-    # read user_ratings and movies tables
-    user_ratings = read_ratings("ratings.csv")
+    # Créer le dossier "data/processed" s’il n’existe pas
+    os.makedirs("data/processed", exist_ok=True)
+    
+    # Load raw data
+    ratings = read_ratings("ratings.csv")
     movies = read_movies("movies.csv")
-    user_matrix = create_user_matrix(user_ratings, movies)
-    movies = movies.drop("title", axis=1)
-    movies.to_csv("data/processed/movie_matrix.csv", index=False)
-    user_matrix.to_csv("data/processed/user_matrix.csv")
+
+    # Filter and preprocess
+    liked_ratings = keep_only_liked_movies(ratings)
+    filtered_ratings = filter_users_with_min_likes(liked_ratings)
+    
+    # Create user profile matrix (average genre preference)
+    user_profiles = create_user_matrix(filtered_ratings, movies)
+
+    # Save processed data
+    save_processed_data(movies, user_profiles)
