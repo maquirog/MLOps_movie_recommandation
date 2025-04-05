@@ -1,67 +1,59 @@
 import pandas as pd
 import json
 import numpy as np
+import os
 
-def load_favorite_movies(user_favorites_json="data/processed/user_favorites.json"):
+def load_user_favorites(user_favorites_json="data/processed/user_favorites.json"):
     """
     Charge les films préférés de chaque utilisateur à partir du fichier JSON.
     """
     with open(user_favorites_json, "r") as f:
-        favorite_movies = json.load(f)
-    return favorite_movies
+        return json.load(f)
 
-def load_recommended_movies(user_prediction_json="data/prediction/predictions.json"):
+def load_user_recommendations(user_prediction_json="data/prediction/predictions.json"):
     """
     Charge les films recommandés par le model pour chaque utilisateur à partir du fichier JSON.
     """
     with open(user_prediction_json, "r") as f:
-        recommended_movies = json.load(f)
-    return recommended_movies
+        return json.load(f)
 
-def load_total_movies(movies_csv="data/processed/movie_matrix.csv"):
+def load_total_movie_count(movies_csv="data/processed/movie_matrix.csv"):
     """
     Charge le dataset des films et retourne le nombre total de films.
     """
     df = pd.read_csv(movies_csv)
     return len(df)
 
-def precision_and_recall(favorite_movies, recommended_movies, k=10):
+def compute_precision_recall_at_k(favorites, recommendations, k=10):
     """
     Évalue les recommandations en calculant Precision@k et Recall@k.
     """
-    precision = []
-    recall = []
+    precision, recall = [], []
 
-    for user_id, liked_movies in favorite_movies.items():
-        # Obtenir les k films recommandés pour cet utilisateur
-        recommended = recommended_movies.get(user_id, [])
+    for user_id, liked_movies in favorites.items():
+        recommended = recommended_movies.get(user_id, [])[:k]
         
-        # Calculer l'intersection entre les films recommandés et les films aimés
-        recommended_set = set(recommended[:k])
+        recommendations = set(recommended)
         liked_set = set(liked_movies)
         
         # Precision@k = (Films recommandés pertinents) / k
-        precision_at_k = len(recommended_set.intersection(liked_set)) / k
+        precision_at_k = len(recommendations.intersection(liked_set)) / k
         
         # Recall@k = (Films aimés retrouvés parmi les recommandés) / (Total des films aimés)
-        recall_at_k = len(recommended_set.intersection(liked_set)) / len(liked_set) if liked_set else 0
+        recall_at_k = len(recommendations.intersection(liked_set)) / len(liked_set) if liked_set else 0
         
         precision.append(precision_at_k)
         recall.append(recall_at_k)
     
-    # Moyenne des précisions et rappels
-    avg_precision = sum(precision) / len(precision) if precision else 0
-    avg_recall = sum(recall) / len(recall) if recall else 0
-    
-    return avg_precision, avg_recall
+    return np.mean(precision), np.mean(recall)
 
-def hit_rate(favorite_movies, recommended_movies, k=10):
+def compute_hit_rate_at_k(favorites, recommendations, k=10):
     """
     Calcule le Hit Rate pour les recommandations.
     """
     hits = 0
-    for user_id, liked_movies in favorite_movies.items():
-        recommended = recommended_movies.get(user_id, [])
+    for user_id, liked_movies in favorites.items():
+        recommended = recommendations.get(user_id, [])
         recommended_set = set(recommended[:k])
         liked_set = set(liked_movies)
         
@@ -69,79 +61,62 @@ def hit_rate(favorite_movies, recommended_movies, k=10):
         if recommended_set.intersection(liked_set):
             hits += 1
     
-    return hits / len(favorite_movies)
+    return hits / len(favorites)
 
-def coverage(recommended_movies, total_movies, k=10):
+def compute_coverage_at_k(recommendations, total_movies, k=10):
     """
     Calcule le Coverage des recommandations.
     """
     recommended_set = set()
-    for user_id, recommended in recommended_movies.items():
+    for user_id, recommended in recommendations.items():
         recommended_set.update(recommended[:k])
     
     return len(recommended_set) / total_movies
 
 
-def dcg_at_k(recommended, liked_movies, k=10):
-    """
-    Calcule le DCG@k pour un utilisateur donné.
-    """
-    recommended_set = set(recommended[:k])
-    liked_set = set(liked_movies)
-    
-    # Calcul du gain pour chaque film recommandé
-    dcg = 0
-    for i, movie in enumerate(recommended[:k]):
-        # Si le film recommandé est aimé par l'utilisateur, on lui donne une pertinence de 1
-        relevance = 1 if movie in liked_set else 0
-        dcg += relevance / np.log2(i + 2)  # Plus la position est basse, moins il compte
-    
-    return dcg
+def compute_ndcg_at_k(favorites, recommendations, k=10):
+    def dcg(recommended, liked):
+        return sum(1 / np.log2(i + 2) if movie in liked else 0
+                   for i, movie in enumerate(recommended[:k]))
 
-def idcg_at_k(liked_movies, k=10):
-    """
-    Calcule l'IDCG@k pour un utilisateur donné.
-    """
-    # L'IDCG idéal est 1 pour chaque film aimé dans les positions 1, 2, ..., k
-    return np.sum([1 / np.log2(i + 2) for i in range(min(k, len(liked_movies)))])
+    def idcg(liked):
+        return sum(1 / np.log2(i + 2) for i in range(min(k, len(liked))))
 
-def ndcg_at_k(favorite_movies, recommended_movies, k=10):
-    """
-    Calcule le NDCG@k moyen pour tous les utilisateurs.
-    """
-    ndcg_scores = []
+    scores = []
+    for user_id, liked in favorites.items():
+        rec = recommendations.get(user_id, [])[:k]
+        dcg_val = dcg(rec, liked)
+        idcg_val = idcg(liked)
+        scores.append(dcg_val / idcg_val if idcg_val else 0)
+
+    return np.mean(scores)
+
+def evaluate_and_save_metrics(favorites,recommendations, k=10, output_path="metrics/scores.json"):
+    total_movies = load_total_movie_count()
+    precision, recall = compute_precision_recall_at_k(favorites, recommendations, k)
+    hr = compute_hit_rate_at_k(favorites, recommendations, k)
+    cov = compute_coverage_at_k(recommendations, total_movies, k)
+    ndcg = compute_ndcg_at_k(favorites, recommendations, k)
     
-    for user_id, liked_movies in favorite_movies.items():
-        recommended = recommended_movies.get(user_id, [])
-        dcg = dcg_at_k(recommended, liked_movies, k)
-        idcg = idcg_at_k(liked_movies, k)
-        
-        # NDCG = DCG / IDCG
-        if idcg > 0:
-            ndcg_scores.append(dcg / idcg)
-        else:
-            ndcg_scores.append(0)
+    metrics = {
+        f"precision@{k}": round(precision, 4),
+        f"recall@{k}": round(recall, 4),
+        f"hit_rate@{k}": round(hr, 4),
+        f"coverage@{k}": round(cov, 4),
+        f"ndcg@{k}": round(ndcg, 4)
+    }
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    with open(output_path, "w") as f:
+        json.dump(metrics, f, indent=4)
+
+    print("\n📊 Recommandation Evaluation Metrics")
+    for key, val in metrics.items():
+        print(f"{key}: {val}")
     
-    return np.mean(ndcg_scores)
-
-
+    return metrics
+    
 if __name__ == "__main__":
     # Charger les films aimés
-    favorite_movies = load_favorite_movies()
-    recommended_movies = load_recommended_movies()
-    total_movies = load_total_movies()
-    
-    # Évaluer les recommandations
-    avg_precision, avg_recall = precision_and_recall(favorite_movies, recommended_movies, k=10)
-    print(f"Precision@10: {avg_precision:.4f}")
-    print(f"Recall@10: {avg_recall:.4f}")
-    
-    hr = hit_rate(favorite_movies, recommended_movies, k=10)
-    print(f"Hit Rate: {hr:.4f}")
-    
-    coverage_score = coverage(recommended_movies, total_movies, k=10)
-    print(f"Coverage: {coverage_score:.4f}")
-    
-    ndcg_score = ndcg_at_k(favorite_movies, recommended_movies, k=10)
-    print(f"NDCG@10: {ndcg_score:.4f}")
-
+    favorite_movies = load_user_favorites()
+    recommended_movies = load_user_recommendations()
+    metrics = evaluate_and_save_metrics(favorite_movies,recommended_movies)
