@@ -45,6 +45,24 @@ services:
       - ./models:/app/models
       - ./src:/app/src
     restart: "no"
+  data-service:
+    build:
+      context: .
+      dockerfile: src/data/Dockerfile
+    volumes:
+      - ./data:/app/data  # Partage des fichiers de données
+    working_dir: /app
+    command: ["python", "import_raw_data.py"]
+    restart: "no"
+  build-features:
+    build:
+      context: .
+      dockerfile: src/data/Dockerfile
+    volumes:
+      - ./data:/app/data
+    working_dir: /app
+    command: ["python", "build_features.py"]
+    restart: "no"
 
 volumes:
   data:
