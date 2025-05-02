@@ -1,13 +1,55 @@
 version: '3.8'
 
 services:
+  train:
+    build:
+      context: . 
+      dockerfile: src/models/train/Dockerfile 
+    volumes:
+      - ./data:/app/data
+      - ./models:/app/models
+    working_dir: /app
+    command: ["python", "train.py"]
+    restart: "no"
+
+  predict:
+    build:
+      context: .
+      dockerfile: src/models/predict/Dockerfile  
+    volumes:
+      - ./data:/app/data
+      - ./models:/app/models
+      - ./data/prediction:/app/data/prediction
+    working_dir: /app
+    command: ["python", "predict.py"]
+    restart: "no"
+
+  evaluate:
+    build:
+      context: .
+      dockerfile: src/models/evaluate/Dockerfile
+    volumes:
+      - ./data:/app/data
+      - ./metrics:/app/metrics
+    working_dir: /app
+    command: ["python", "evaluate.py"]
+    restart: "no"
   api:
     build:
       context: .
-      dockerfile: src/api/Dockerfile
+      dockerfile: src/api/Dockerfile 
     ports:
       - "8000:8000"
     volumes:
-      - ./src:/app/src
-      - ./models:/app/models
       - ./data:/app/data
+      - ./models:/app/models
+      - ./src:/app/src
+    restart: "no"
+
+volumes:
+  data:
+    driver: local
+  models:
+    driver: local
+  metrics:
+    driver: local
