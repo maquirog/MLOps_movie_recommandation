@@ -4,17 +4,20 @@ services:
   api:
     build:
       context: .
-      dockerfile: src/api/Dockerfile 
+      dockerfile: src/api/Dockerfile
     ports:
       - "8000:8000"
   data-service:
     build:
       context: .
       dockerfile: src/data/Dockerfile
+    environment:
+      - DAGSHUB_REPO=${DAGSHUB_REPO}
+      - DAGSHUB_TOKEN=${DAGSHUB_TOKEN}
   build-features:
     build:
       context: .
-      dockerfile: src/data/Dockerfile
+      dockerfile: src/features/Dockerfile
   train:
     build:
       context: . 
