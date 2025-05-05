@@ -1,0 +1,13 @@
+name: movie_reco_project
+
+python_env: python_env.yaml
+
+entry_points:
+  main:
+    parameters:
+      movie_matrix_path: {type: str, default: "../data/processed/movie_matrix.csv"}
+      user_matrix_path: {type: str, default: "../data/processed/user_matrix.csv"}
+      user_favorites_path: {type: str, default: "../data/processed/user_favorites.json"}
+      n_neighbors: {type: int, default: 30}
+      nearest_neighbors_algorithm: {type: str, default: "ball_tree"}
+    command: "python3 experiment.py --movie_matrix_path {movie_matrix_path} --user_matrix_path {user_matrix_path} --user_favorites_path {user_favorites_path} --n_neighbors {n_neighbors} --nearest_neighbors_algorithm {nearest_neighbors_algorithm}"

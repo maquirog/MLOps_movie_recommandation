@@ -3,28 +3,32 @@ import mlflow
 import pandas as pd
 import numpy as np
 from sklearn.neighbors import NearestNeighbors
-from models.evaluate_model import load_user_favorites, evaluate_and_save_metrics
+from src.models.evaluate_model import load_user_favorites, evaluate_and_save_metrics
 import argparse
 import os
 
 
 def main():
+    # Get project root directory (one level up from script location)
+    PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    print(PROJECT_ROOT)
+
     # Parse arguments
     parser = argparse.ArgumentParser()
-    parser.add_argument('--movie_matrix_path', type=str, 
-                       default="./data/processed/movie_matrix.csv",
-                       help='path to the movie matrix file')
+    parser.add_argument('--movie_matrix_path', type=str,
+                        default=os.path.join(PROJECT_ROOT, "data", "processed", "movie_matrix.csv"),
+                        help='path to the movie matrix file')
     parser.add_argument('--user_matrix_path', type=str, 
-                       default="./data/processed/user_matrix.csv",
+                       default=os.path.join(PROJECT_ROOT, "data", "processed", "user_matrix.csv"),
                        help='path to the user matrix file')
     parser.add_argument('--user_favorites_path', type=str, 
-                       default="./data/processed/user_favorites.json",
-                       help='path to users favourites movies file')
+                       default=os.path.join(PROJECT_ROOT, "data", "processed", "user_favorites.json"),
+                       help='path to users favorites movies file')
     parser.add_argument('--n_neighbors', type=int, 
                        default=30,
                        help='Parameter n_neighbors used for NearestNeighbors training')
-    parser.add_argument('--nearest_neighbours_algorithm', type=str, 
-                       default='ball_tree'',
+    parser.add_argument('--nearest_neighbors_algorithm', type=str, 
+                       default='ball_tree',
                        help='Parameter algorithm used for NearestNeighbors training')
     args = parser.parse_args()
 
@@ -43,7 +47,7 @@ def main():
     # Train model
     params = {
         'n_neighbors':args.n_neighbors,
-        'algorithm':args.nearest_neighbours_algorithm
+        'algorithm':args.nearest_neighbors_algorithm
     }
     model = NearestNeighbors(**params).fit(X)
 
@@ -61,7 +65,7 @@ def main():
         int(user_id): list(map(int, movie_indices))
         for user_id, movie_indices in zip(original_ids, selection)
     }
-    metrics = evaluate_and_save_metrics(favorite_movies,recommended_movies)
+    metrics = evaluate_and_save_metrics(favorite_movies,recommended_movies, args.movie_matrix_path)
 
     # Store information in tracking server
     with mlflow.start_run(run_name=run_name) as run:
