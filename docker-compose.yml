@@ -1,73 +1,61 @@
 version: '3.8'
 
+x-common-data-service: &common-data-service
+  build:
+    context: .
+    dockerfile: dockerfiles/dockerfile.data
+  volumes:
+    - ./data:/app/data
+    - ./models:/app/models
+    - ./src/models:/app/src
+  working_dir: /app
+  restart: "no"
+
+x-common-model-service: &common-model-service
+  build:
+    context: .
+    dockerfile: dockerfiles/dockerfile.models
+  volumes:
+    - ./data:/app/data
+    - ./src/models:/app/src
+  working_dir: /app
+  restart: "no"
+
+
 services:
+  import_raw_data:
+    <<: *common-data-service
+    command: ["python", "src/data/import_raw_data.py"]
+
+  build-features:
+    <<: *common-data-service
+    command: ["python", "src/data/build_features.py"]
+
   train:
-    build:
-      context: . 
-      dockerfile: src/models/train/Dockerfile 
-    volumes:
-      - ./data:/app/data
-      - ./models:/app/models
-    working_dir: /app
-    command: ["python", "train.py"]
-    restart: "no"
+    <<: *common-model-service
+    command: ["python", "src/models/train.py"]
 
   predict:
-    build:
-      context: .
-      dockerfile: src/models/predict/Dockerfile  
-    volumes:
-      - ./data:/app/data
-      - ./models:/app/models
-      - ./data/prediction:/app/data/prediction
-    working_dir: /app
-    command: ["python", "predict.py"]
-    restart: "no"
+    <<: *common-model-service
+    command: ["python", "src/models/predict.py"]
 
   evaluate:
-    build:
-      context: .
-      dockerfile: src/models/evaluate/Dockerfile
+    <<: *common-model-service
+    command: ["python", "src/models/evaluate.py"]
     volumes:
-      - ./data:/app/data
       - ./metrics:/app/metrics
-    working_dir: /app
-    command: ["python", "evaluate.py"]
-    restart: "no"
+
   api:
     build:
       context: .
-      dockerfile: src/api/Dockerfile 
+      dockerfile: dockerfiles/dockerfile.api
     ports:
       - "8000:8000"
     volumes:
       - ./data:/app/data
       - ./models:/app/models
       - ./src:/app/src
-    restart: "no"
-  data-service:
-    build:
-      context: .
-      dockerfile: src/data/Dockerfile
-    volumes:
-      - ./data:/app/data  # Partage des fichiers de données
-    working_dir: /app
-    command: ["python", "import_raw_data.py"]
-    restart: "no"
-  build-features:
-    build:
-      context: .
-      dockerfile: src/data/Dockerfile
-    volumes:
-      - ./data:/app/data
-    working_dir: /app
-    command: ["python", "build_features.py"]
+    command: ["uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
     restart: "no"
 
-volumes:
-  data:
-    driver: local
-  models:
-    driver: local
-  metrics:
-    driver: local
+  

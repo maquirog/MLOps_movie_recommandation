@@ -4,13 +4,9 @@ FROM python:3.10-slim
 # Définir le répertoire de travail
 WORKDIR /app
 
-# Copier les fichiers nécessaires
-COPY ./src/models/evaluate /app
-COPY ./data /app/data
-COPY ./models /app/models
-
 # Installer les dépendances
+COPY ./requirements/data.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt
 
-# Commande par défaut pour lancer l'évaluation
-CMD ["python", "evaluate.py"]
+# Commande par défaut 
+CMD ["python", "import_raw_data.py"]

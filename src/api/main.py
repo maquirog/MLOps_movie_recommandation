@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from src.api.models import PredictionRequest  # Import du modèle PredictionRequest depuis models.py
-from src.models.predict.predict import load_user_data, load_model, make_predictions
+from src.models.predict import load_user_data, load_model, make_predictions
 from typing import Dict, List
 
 # Initialisation de l'application FastAPI
