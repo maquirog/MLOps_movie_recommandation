@@ -1,0 +1,61 @@
+version: '3.8'
+
+x-common-data-service: &common-data-service
+  build:
+    context: .
+    dockerfile: dockerfiles/dockerfile.data
+  volumes:
+    - ./data:/app/data
+    - ./models:/app/models
+    - ./src/models:/app/src
+  working_dir: /app
+  restart: "no"
+
+x-common-model-service: &common-model-service
+  build:
+    context: .
+    dockerfile: dockerfiles/dockerfile.models
+  volumes:
+    - ./data:/app/data
+    - ./models:/app/models
+  working_dir: /app
+  restart: "no"
+
+
+services:
+  import_raw_data:
+    <<: *common-data-service
+    command: ["python", "import_raw_data.py"]
+
+  build-features:
+    <<: *common-data-service
+    command: ["python", "build_features.py"]
+
+  train:
+    <<: *common-model-service
+    command: ["python", "train.py"]
+
+  predict:
+    <<: *common-model-service
+    command: ["python", "predict.py"]
+
+  evaluate:
+    <<: *common-model-service
+    command: ["python", "evaluate.py"]
+    volumes:
+      - ./metrics:/app/metrics
+
+  api:
+    build:
+      context: .
+      dockerfile: dockerfiles/dockerfile.api
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+      - ./models:/app/models
+      - ./src:/app/src
+    command: ["uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    restart: "no"
+
+  
