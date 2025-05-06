@@ -1,0 +1,1 @@
+mlflow run mlflow_experiment/ --env-manager=local --experiment-name Movie_Recommandation_Model --run_name "first_run"
