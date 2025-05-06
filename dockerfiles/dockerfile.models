@@ -5,8 +5,11 @@ FROM python:3.10-slim
 WORKDIR /app
 
 # Installer les dépendances
+COPY ./src/models /app
+COPY ./data /app/data
+COPY ./models /app/models
 COPY ./requirements/models.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt
 
-# Commande pour exécuter l'API
-CMD ["uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Commande par défaut 
+CMD ["python", "train.py"]

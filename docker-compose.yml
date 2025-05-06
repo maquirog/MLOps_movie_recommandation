@@ -17,7 +17,7 @@ x-common-model-service: &common-model-service
     dockerfile: dockerfiles/dockerfile.models
   volumes:
     - ./data:/app/data
-    - ./src/models:/app/src
+    - ./models:/app/models
   working_dir: /app
   restart: "no"
 
@@ -25,23 +25,23 @@ x-common-model-service: &common-model-service
 services:
   import_raw_data:
     <<: *common-data-service
-    command: ["python", "src/data/import_raw_data.py"]
+    command: ["python", "import_raw_data.py"]
 
   build-features:
     <<: *common-data-service
-    command: ["python", "src/data/build_features.py"]
+    command: ["python", "build_features.py"]
 
   train:
     <<: *common-model-service
-    command: ["python", "src/models/train.py"]
+    command: ["python", "train.py"]
 
   predict:
     <<: *common-model-service
-    command: ["python", "src/models/predict.py"]
+    command: ["python", "predict.py"]
 
   evaluate:
     <<: *common-model-service
-    command: ["python", "src/models/evaluate.py"]
+    command: ["python", "evaluate.py"]
     volumes:
       - ./metrics:/app/metrics
 
