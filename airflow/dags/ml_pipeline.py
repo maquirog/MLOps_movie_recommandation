@@ -1,5 +1,6 @@
 from airflow import DAG
-from airflow.operators.docker_operator import DockerOperator
+from airflow.providers.docker.operators.docker import DockerOperator
+from docker.types import Mount
 from datetime import datetime
 
 default_args = {
@@ -7,6 +8,24 @@ default_args = {
     'retries': 1,
 }
 
+# Fonction pour créer un DockerOperator
+def create_docker_task(task_id, image, command):
+    return DockerOperator(
+        task_id=task_id,
+        image=image,
+        command=command,
+        auto_remove=True,
+        docker_url='unix://var/run/docker.sock',
+        network_mode='bridge',
+        mounts=[
+            Mount(source='/opt/airflow/dags', target='/opt/airflow/dags', type='bind'),
+            Mount(source='/opt/airflow/logs', target='/opt/airflow/logs', type='bind'),
+            Mount(source='/opt/airflow/plugins', target='/opt/airflow/plugins', type='bind'),
+            Mount(source='/var/run/docker.sock', target='/var/run/docker.sock', type='bind'),
+        ],
+    )
+
+# Définition du DAG
 with DAG(
     'ml_pipeline',
     default_args=default_args,
@@ -15,40 +34,29 @@ with DAG(
     start_date=datetime(2023, 1, 1),
     catchup=False,
 ) as dag:
-    # Tâche pour importer les données brutes
-    import_data = DockerOperator(
+    # Création des tâches
+    import_data = create_docker_task(
         task_id='import_data',
-        image='data-service',
+        image='import_raw_data',
         command='python import_raw_data.py',
-        auto_remove=True,
-        docker_url='unix://var/run/docker.sock',
     )
 
-    # Tâche pour construire les features
-    build_features = DockerOperator(
+    build_features = create_docker_task(
         task_id='build_features',
         image='build-features',
         command='python build_features.py',
-        auto_remove=True,
-        docker_url='unix://var/run/docker.sock',
     )
 
-    # Tâche pour entraîner le modèle
-    train_model = DockerOperator(
+    train_model = create_docker_task(
         task_id='train_model',
         image='train',
         command='python train.py',
-        auto_remove=True,
-        docker_url='unix://var/run/docker.sock',
     )
 
-    # Tâche pour évaluer le modèle
-    evaluate_model = DockerOperator(
+    evaluate_model = create_docker_task(
         task_id='evaluate_model',
         image='evaluate',
         command='python evaluate.py',
-        auto_remove=True,
-        docker_url='unix://var/run/docker.sock',
     )
 
     # Définition des dépendances
