@@ -9,6 +9,8 @@ from itertools import product
 import argparse
 
 def main():
+    BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+
     # Parse arguments
     parser = argparse.ArgumentParser()
     parser.add_argument('--n_movies_metrics', type=int, 
@@ -28,11 +30,11 @@ def main():
     param_grid = list(product(n_neighbors_list, algorithm_list))
 
     # Import Database
-    movie_matrix = pd.read_csv("./data/processed/movie_matrix.csv")
+    movie_matrix = pd.read_csv(os.path.join(BASE_DIR, 'data', 'processed', 'movie_matrix.csv'))
     X = movie_matrix.drop("movieId", axis=1)
 
-    favorite_movies = load_user_favorites("./data/processed/user_favorites.json")
-    users = pd.read_csv("./data/processed/user_matrix.csv")
+    favorite_movies = load_user_favorites(os.path.join(BASE_DIR, 'data', 'processed', 'user_favorites.json'))
+    users = pd.read_csv(os.path.join(BASE_DIR, 'data', 'processed', 'user_matrix.csv'))
     users_id = list(range(1, 51))
     filtered_users = users[users["userId"].isin(users_id)]
     original_ids = filtered_users["userId"].values
@@ -65,7 +67,7 @@ def main():
         metrics = evaluate_and_save_metrics(
             favorites=favorite_movies,
             recommendations=recommended_movies,
-            movies_csv="./data/processed/movie_matrix.csv",
+            movies_csv=os.path.join(BASE_DIR, 'data', 'processed', 'movie_matrix.csv'),
             k=args.n_movies_metrics)
 
         # Store information in tracking server

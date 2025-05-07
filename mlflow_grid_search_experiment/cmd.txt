@@ -1,3 +1,6 @@
-docker build -t mlflow_experiment_image .
+mlflow server --host 0.0.0.0 --port 8080
+
+#depuis la racine du repo
+docker build -t mlflow_experiment_image -f mlflow_grid_search_experiment/Dockerfile .
 
 docker run mlflow_experiment_image -P n_movies_metrics=20
