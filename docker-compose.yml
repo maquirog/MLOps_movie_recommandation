@@ -33,22 +33,12 @@ x-airflow-common: &airflow-common
     postgres:
       condition: service_healthy
 
-x-common-data-service: &common-data-service
+x-common-service: &common-service
   build:
     context: .
-    dockerfile: dockerfiles/dockerfile.data
+    dockerfile: dockerfiles/Dockerfile
   volumes:
-    - ./data:/app/data
-    - ./models:/app/models
-    - ./src/models:/app/src
-  working_dir: /app
-  restart: "no"
-
-x-common-model-service: &common-model-service
-  build:
-    context: .
-    dockerfile: dockerfiles/dockerfile.models
-  volumes:
+    - ./src:/app/src
     - ./data:/app/data
     - ./models:/app/models
   working_dir: /app
@@ -57,37 +47,31 @@ x-common-model-service: &common-model-service
 # Définition des services
 services:
   import_raw_data:
-    <<: *common-data-service
-    command: ["python", "import_raw_data.py"]
+    <<: *common-service
+    command: ["python", "src/data/import_raw_data.py"]
 
   build-features:
-    <<: *common-data-service
-    command: ["python", "build_features.py"]
+    <<: *common-service
+    command: ["python", "src/data/build_features.py"]
 
   train:
-    <<: *common-model-service
-    command: ["python", "train.py"]
+    <<: *common-service
+    command: ["python", "src/models/train.py"]
 
   predict:
-    <<: *common-model-service
-    command: ["python", "predict.py"]
+    <<: *common-service
+    command: ["python", "src/models/predict.py"]
 
   evaluate:
-    <<: *common-model-service
-    command: ["python", "evaluate.py"]
+    <<: *common-service
+    command: ["python", "src/models/evaluate.py"]
     volumes:
       - ./metrics:/app/metrics
 
   api:
-    build:
-      context: .
-      dockerfile: dockerfiles/dockerfile.api
+    <<: *common-service
     ports:
       - "8000:8000"
-    volumes:
-      - ./data:/app/data
-      - ./models:/app/models
-      - ./src:/app/src
     command: ["uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
     restart: "no"
 

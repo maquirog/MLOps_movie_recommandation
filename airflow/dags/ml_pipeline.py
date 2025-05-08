@@ -42,31 +42,31 @@ with DAG(
     import_data = create_docker_task(
         task_id='import_data',
         image='mlops_movie_recommandation_import_raw_data:latest',
-        command='python import_raw_data.py',
+        command='python src/data/import_raw_data.py',
     )
 
     build_features = create_docker_task(
         task_id='build_features',
         image='mlops_movie_recommandation_build-features:latest',
-        command='python build_features.py',
+        command='python src/data/build_features.py',
     )
 
     train_model = create_docker_task(
         task_id='train_model',
         image='mlops_movie_recommandation_train:latest',
-        command='python train.py',
+        command='python src/models/train.py',
     )
 
     predict_model = create_docker_task(
         task_id='predict_model',
         image='mlops_movie_recommandation_predict:latest',
-        command='python predict.py',
+        command='python src/models/predict.py',
     )
 
     evaluate_model = create_docker_task(
         task_id='evaluate_model',
         image='mlops_movie_recommandation_evaluate:latest',
-        command='python evaluate.py',
+        command='python src/models/evaluate.py',
     )
 
     # Définition des dépendances
