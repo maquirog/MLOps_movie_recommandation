@@ -1,7 +1,11 @@
 name: Deploy and Run Airflow DAG
 
 on:
-  workflow_dispatch: # Permet de déclencher manuellement ce workflow.
+  workflow_dispatch: 
+  
+  pull_request:
+  types:
+    - opened
 
 jobs:
   deploy-and-run:
