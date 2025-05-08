@@ -23,6 +23,12 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y docker-compose
 
+    - name: Changing permissions on volumes
+      run: |
+        sudo chmod -R 777 airflow/logs/
+        sudo chmod -R 777 airflow/dags/
+        sudo chmod -R 777 airflow/plugins/
+
     # 3. Construire et démarrer les services avec Docker Compose
     - name: Start Docker Compose Services
       run: |
