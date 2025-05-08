@@ -38,6 +38,10 @@ jobs:
         docker network ls
         docker network inspect bridge
 
+    - name: Check permissions on volumes
+      run: |
+        ls -la airflow
+
     # 4. Attendre que les services soient prêts
     - name: Wait for Airflow Webserver
       run: |
