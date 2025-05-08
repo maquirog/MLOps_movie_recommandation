@@ -73,6 +73,36 @@ jobs:
           -u "$AIRFLOW_USERNAME:$AIRFLOW_PASSWORD" \
           -d '{"conf": {}}'
 
+    - name: Wait for Airflow DAG Execution
+      run: |
+        # Étape 1 : Récupérer le dernier dag_run_id pour le DAG ml_pipeline
+        export AIRFLOW_USERNAME=airflow
+        export AIRFLOW_PASSWORD=airflow
+        DAG_RUN_ID=$(curl -s -u "$AIRFLOW_USERNAME:$AIRFLOW_PASSWORD" \
+          http://localhost:8080/api/v1/dags/ml_pipeline/dagRuns?order_by=-execution_date \
+          | jq -r '.dag_runs[0].dag_run_id')
+        
+        echo "Last DAG Run ID: $DAG_RUN_ID"
+
+        # Étape 2 : Boucle pour attendre que le DAG soit terminé
+        for i in {1..30}; do
+          echo "Checking DAG execution state..."
+          STATE=$(curl -s -u "$AIRFLOW_USERNAME:$AIRFLOW_PASSWORD" \
+            http://localhost:8080/api/v1/dags/ml_pipeline/dagRuns/$DAG_RUN_ID \
+            | jq -r '.state')
+          echo "Current state: $STATE"
+          if [ "$STATE" == "success" ]; then
+            echo "DAG execution succeeded."
+            exit 0
+          elif [ "$STATE" == "failed" ]; then
+            echo "DAG execution failed."
+            exit 1
+          fi
+          sleep 10
+        done
+        echo "DAG did not complete within the expected time."
+        exit 1
+  
     # 6. Afficher les logs des conteneurs en cas de succès ou d'échec
     - name: Show Docker Compose Logs
       if: always()
