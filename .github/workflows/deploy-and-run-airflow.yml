@@ -28,6 +28,11 @@ jobs:
       run: |
         docker-compose -f docker-compose.yml up -d
 
+    - name: Check Docker Compose Status
+      run: |
+        docker-compose -f docker-compose.yml ps
+        docker-compose -f docker-compose.yml logs
+
     # 4. Attendre que les services soient prêts
     - name: Wait for Airflow Webserver
       run: |
