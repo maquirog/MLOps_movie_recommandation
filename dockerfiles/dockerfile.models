@@ -1,16 +1,5 @@
 # Utiliser une image officielle Python comme base
 FROM python:3.10-slim
-
-# Définir l'UID et le GID en dur
-ENV UID=1000
-ENV GID=1000
-
-# Créer un groupe et un utilisateur avec les UID/GID spécifiés
-RUN groupadd -g $GID appgroup && \
-    useradd -m -u $UID -g appgroup appuser
-
-# Passer à cet utilisateur non root
-USER appuser
 # Définir le répertoire de travail à l'intérieur du conteneur
 WORKDIR /app
 
