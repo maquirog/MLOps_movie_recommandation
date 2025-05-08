@@ -31,16 +31,27 @@ jobs:
     - name: Check Docker Compose Status
       run: |
         docker-compose -f docker-compose.yml ps
-        docker-compose -f docker-compose.yml logs
+        docker-compose -f docker-compose.yml logs airflow-webserver
+
+    - name: Inspect Docker Network
+      run: |
+        docker network ls
+        docker network inspect bridge
 
     # 4. Attendre que les services soient prêts
     - name: Wait for Airflow Webserver
       run: |
-        until curl --fail http://localhost:8080/health; do
-          echo "Waiting for Airflow Webserver to be ready..."
+        for i in {1..30}; do
+          echo "Attempt $i: Checking if Airflow Webserver is ready..."
+          curl -v http://airflow-webserver:8080/health || echo "Connection failed."
+          if curl --fail http://airflow-webserver:8080/health; then
+            echo "Airflow Webserver is ready."
+            exit 0
+          fi
           sleep 10
         done
-        echo "Airflow Webserver is ready."
+        echo "Airflow Webserver did not start within the expected time."
+        exit 1
 
     # 5. Déclencher le DAG Airflow
     - name: Trigger Airflow DAG
