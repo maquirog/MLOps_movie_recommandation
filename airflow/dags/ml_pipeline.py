@@ -19,6 +19,8 @@ def create_docker_task(task_id, image, command):
         network_mode='bridge',
         mounts=[
             Mount(source='/home/ubuntu/MLOps_movie_recommandation/data', target='/app/data', type='bind'),
+            Mount(source='/home/ubuntu/MLOps_movie_recommandation/models', target='/app/models', type='bind'),
+            Mount(source='/home/ubuntu/MLOps_movie_recommandation/metrics', target='/app/metrics', type='bind'),
             Mount(source='/home/ubuntu/MLOps_movie_recommandation/airflow/dags', target='/opt/airflow/dags', type='bind'),
             Mount(source='/home/ubuntu/MLOps_movie_recommandation/airflow/logs', target='/opt/airflow/logs', type='bind'),
             Mount(source='/home/ubuntu/MLOps_movie_recommandation/airflow/plugins', target='/opt/airflow/plugins', type='bind'),
