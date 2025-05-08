@@ -57,6 +57,12 @@ with DAG(
         command='python train.py',
     )
 
+    predict_model = create_docker_task(
+        task_id='predict_model',
+        image='mlops_movie_recommandation_predict:latest',
+        command='python predict.py',
+    )
+
     evaluate_model = create_docker_task(
         task_id='evaluate_model',
         image='mlops_movie_recommandation_evaluate:latest',
@@ -64,4 +70,4 @@ with DAG(
     )
 
     # Définition des dépendances
-    import_data >> build_features >> train_model >> evaluate_model
+    import_data >> build_features >> train_model >> predict_model >> evaluate_model
