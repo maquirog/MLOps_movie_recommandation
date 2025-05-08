@@ -51,13 +51,13 @@ jobs:
     # 4. Attendre que les services soient prêts
     - name: Wait for Airflow Webserver
       run: |
-        for i in {1..30}; do
+        for i in {1..10}; do
           echo "Attempt $i: Checking if Airflow Webserver is ready..."
-          curl -v http://airflow-webserver:8080/health || echo "Connection failed."
-          if curl --fail http://airflow-webserver:8080/health; then
+          if curl --fail http://localhost:8080/health; then
             echo "Airflow Webserver is ready."
             exit 0
           fi
+          echo "Waiting for Airflow Webserver to be ready..."
           sleep 10
         done
         echo "Airflow Webserver did not start within the expected time."
