@@ -61,7 +61,7 @@ jobs:
       run: |
         echo "Checking Airflow health..."
         echo "Using AIRFLOW_HOST: $AIRFLOW_HOST, AIRFLOW_PORT: $AIRFLOW_PORT"
-        RESPONSE=$(curl -s http://$AIRFLOW_HOST:$AIRFLOW_PORT/health)
+        RESPONSE=$(curl -v http://$AIRFLOW_HOST:$AIRFLOW_PORT/health)
         echo "Response from Airflow health check:"
         echo "$RESPONSE"
         echo "$RESPONSE" | jq
@@ -72,7 +72,7 @@ jobs:
       run: |
         echo "Activating Airflow DAG..."
         echo "Using AIRFLOW_HOST: $AIRFLOW_HOST, AIRFLOW_PORT: $AIRFLOW_PORT, DAG_ID: $DAG_ID"
-        RESPONSE=$(curl -s -X PATCH http://$AIRFLOW_HOST:$AIRFLOW_PORT/api/v1/dags/$DAG_ID \
+        RESPONSE=$(curl -v -X PATCH http://$AIRFLOW_HOST:$AIRFLOW_PORT/api/v1/dags/$DAG_ID \
           -H "Content-Type: application/json" \
           -u "$AIRFLOW_USERNAME:$AIRFLOW_PASSWORD" \
           -d '{"is_paused": false}')
@@ -86,7 +86,7 @@ jobs:
       run: |
         echo "Triggering Airflow DAG..."
         echo "Using AIRFLOW_HOST: $AIRFLOW_HOST, AIRFLOW_PORT: $AIRFLOW_PORT, DAG_ID: $DAG_ID"
-        DAG_RUN_RESPONSE=$(curl -s -X POST http://$AIRFLOW_HOST:$AIRFLOW_PORT/api/v1/dags/$DAG_ID/dagRuns \
+        DAG_RUN_RESPONSE=$(curl -v -X POST http://$AIRFLOW_HOST:$AIRFLOW_PORT/api/v1/dags/$DAG_ID/dagRuns \
           -H "Content-Type: application/json" \
           -u "$AIRFLOW_USERNAME:$AIRFLOW_PASSWORD" \
           -d '{"conf": {}}')
@@ -103,7 +103,7 @@ jobs:
         echo "Waiting for DAG Run to complete..."
         echo "Using AIRFLOW_HOST: $AIRFLOW_HOST, AIRFLOW_PORT: $AIRFLOW_PORT, DAG_RUN_ID: $DAG_RUN_ID"
         while true; do
-          DAG_RUN_STATUS=$(curl -s -u "$AIRFLOW_USERNAME:$AIRFLOW_PASSWORD" \
+          DAG_RUN_STATUS=$(curl -v -u "$AIRFLOW_USERNAME:$AIRFLOW_PASSWORD" \
             http://$AIRFLOW_HOST:$AIRFLOW_PORT/api/v1/dags/$DAG_ID/dagRuns/$DAG_RUN_ID | jq -r '.state')
           echo "Current DAG Run Status: $DAG_RUN_STATUS"
           if [[ "$DAG_RUN_STATUS" != "running" ]]; then
@@ -119,7 +119,7 @@ jobs:
       run: |
         echo "Fetching tasks for DAG Run..."
         echo "Using AIRFLOW_HOST: $AIRFLOW_HOST, AIRFLOW_PORT: $AIRFLOW_PORT, DAG_RUN_ID: $DAG_RUN_ID"
-        TASKS=$(curl -s -u "$AIRFLOW_USERNAME:$AIRFLOW_PASSWORD" \
+        TASKS=$(curl -v -u "$AIRFLOW_USERNAME:$AIRFLOW_PASSWORD" \
           http://$AIRFLOW_HOST:$AIRFLOW_PORT/api/v1/dags/$DAG_ID/dagRuns/$DAG_RUN_ID/taskInstances | jq -r '.task_instances[].task_id')
         echo "Retrieved tasks:"
         echo "$TASKS"
@@ -132,7 +132,7 @@ jobs:
         echo "Using TASKS: ${{ env.TASKS }}"
         for TASK_ID in ${{ env.TASKS }}; do
           echo "Processing Task: $TASK_ID"
-          TASK_STATUS=$(curl -s -u "$AIRFLOW_USERNAME:$AIRFLOW_PASSWORD" \
+          TASK_STATUS=$(curl -v -u "$AIRFLOW_USERNAME:$AIRFLOW_PASSWORD" \
             http://$AIRFLOW_HOST:$AIRFLOW_PORT/api/v1/dags/$DAG_ID/dagRuns/$DAG_RUN_ID/taskInstances/$TASK_ID | jq -r '.state')
           echo "Task Status: $TASK_STATUS"
           LOG_DIR="$LOGS_PATH/dag_id=$DAG_ID/run_id=$DAG_RUN_ID/task_id=$TASK_ID"
