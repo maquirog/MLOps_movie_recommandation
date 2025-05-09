@@ -11,6 +11,13 @@ on:
 jobs:
   deploy-and-debug:
     runs-on: ubuntu-latest
+    env: # Variables globales pour le job
+      AIRFLOW_HOST: "localhost"
+      AIRFLOW_PORT: "8080"
+      AIRFLOW_USERNAME: "airflow"
+      AIRFLOW_PASSWORD: "airflow"
+      DAG_ID: "ml_pipeline"
+      LOGS_PATH: "airflow/logs"
 
     steps:
     # 1. Checkout le code
@@ -26,7 +33,7 @@ jobs:
     # 3. Modifier les permissions sur les volumes
     - name: Change Permissions on Volumes
       run: |
-        sudo chmod -R 777 airflow/logs/
+        sudo chmod -R 777 $LOGS_PATH
         sudo chmod -R 777 airflow/dags/
         sudo chmod -R 777 airflow/plugins/
 
@@ -41,175 +48,70 @@ jobs:
         docker-compose -f docker-compose.yml ps
         docker-compose -f docker-compose.yml logs airflow-webserver
 
-    # 6. Inspecter le réseau Docker
-    - name: Inspect Docker Network
+    # 6.1 Vérification de la santé d'Airflow
+    - name: Check Airflow Health
       run: |
-        docker network ls
-        docker network inspect bridge
+        curl -s http://$AIRFLOW_HOST:$AIRFLOW_PORT/health | jq
 
-    # 7. Vérifier les permissions sur les volumes
-    - name: Check Permissions on Volumes
+    # 6.2 Activer le DAG s'il est désactivé
+    - name: Activate Airflow DAG
       run: |
-        ls -la airflow
-        ls -la airflow/logs
-        ls -la airflow/dags
-        ls -la airflow/plugins
-
-    # 8. Vérifier les conteneurs Docker actifs
-    - name: List Running Docker Containers
-      run: |
-        docker ps
-        docker ps -a
-
-    # 9. Attendre que le serveur Airflow soit prêt
-    - name: Wait for Airflow Webserver
-      run: |
-        for i in {1..10}; do
-          echo "Attempt $i: Checking if Airflow Webserver is ready..."
-          if curl --fail http://localhost:8080/health; then
-            echo "Airflow Webserver is ready."
-            exit 0
-          fi
-          echo "Waiting for Airflow Webserver to be ready..."
-          sleep 10
-        done
-        echo "Airflow Webserver did not start within the expected time."
-        exit 1
-
-    # 10. Vérifier l'état du Scheduler
-    - name: Check Scheduler Status
-      run: |
-        export AIRFLOW_USERNAME=airflow
-        export AIRFLOW_PASSWORD=airflow
-        curl -s -u "$AIRFLOW_USERNAME:$AIRFLOW_PASSWORD" \
-          http://localhost:8080/health | jq '.scheduler'
-
-    # 11. Vérifier l'état de la base de données Metadata
-    - name: Check Metadata Database Health
-      run: |
-        curl -s http://localhost:8080/health | jq '.metadatabase'
-
-    # 12. Activer le DAG s'il est en pause
-    - name: Activate DAG
-      run: |
-        export AIRFLOW_USERNAME=airflow
-        export AIRFLOW_PASSWORD=airflow
-        curl -s -X PATCH http://localhost:8080/api/v1/dags/ml_pipeline \
+        curl -s -X PATCH http://$AIRFLOW_HOST:$AIRFLOW_PORT/api/v1/dags/$DAG_ID \
           -H "Content-Type: application/json" \
           -u "$AIRFLOW_USERNAME:$AIRFLOW_PASSWORD" \
-          -d '{"is_paused": false}'
+          -d '{"is_paused": false}' | jq
 
-    # 13. Déclencher le DAG Airflow
+    # 6.3 Déclencher le DAG
     - name: Trigger Airflow DAG
       id: trigger_dag
       run: |
-        export AIRFLOW_USERNAME=airflow
-        export AIRFLOW_PASSWORD=airflow
-        DAG_RUN_ID=$(curl -s -X POST http://localhost:8080/api/v1/dags/ml_pipeline/dagRuns \
+        DAG_RUN_RESPONSE=$(curl -s -X POST http://$AIRFLOW_HOST:$AIRFLOW_PORT/api/v1/dags/$DAG_ID/dagRuns \
           -H "Content-Type: application/json" \
           -u "$AIRFLOW_USERNAME:$AIRFLOW_PASSWORD" \
-          -d '{"conf": {}}' | jq -r '.dag_run_id')
-        echo "Triggered DAG Run ID: $DAG_RUN_ID"
-        echo "dag_run_id=$DAG_RUN_ID" >> $GITHUB_ENV
+          -d '{"conf": {}}')
+        echo "DAG Run Response: $DAG_RUN_RESPONSE"
+        DAG_RUN_ID=$(echo $DAG_RUN_RESPONSE | jq -r '.dag_run_id')
+        echo "DAG_RUN_ID=$DAG_RUN_ID" >> $GITHUB_ENV
 
-    # 14. Vérifier l'état initial du DAG Run
-    - name: Check Initial DAG Run State
+    # 6.4 Attendre que le DAG Run ne soit plus "running"
+    - name: Wait for DAG Run to Complete
       run: |
-        export AIRFLOW_USERNAME=airflow
-        export AIRFLOW_PASSWORD=airflow
-        export DAG_RUN_ID=$DAG_RUN_ID
-        curl -s -u "$AIRFLOW_USERNAME:$AIRFLOW_PASSWORD" \
-          http://localhost:8080/api/v1/dags/ml_pipeline/dagRuns/$DAG_RUN_ID | jq
-
-    # 15. Lister les DAG Runs disponibles
-    - name: List DAG Runs
-      run: |
-        export AIRFLOW_USERNAME=airflow
-        export AIRFLOW_PASSWORD=airflow
-        curl -s -u "$AIRFLOW_USERNAME:$AIRFLOW_PASSWORD" \
-          http://localhost:8080/api/v1/dags/ml_pipeline/dagRuns | jq
-
-    # 16. Suivre l'état du DAG Run
-    - name: Monitor DAG Run State
-      run: |
-        export AIRFLOW_USERNAME=airflow
-        export AIRFLOW_PASSWORD=airflow
-        export DAG_RUN_ID=$DAG_RUN_ID
-        for i in {1..10}; do
-          STATE=$(curl -s -u "$AIRFLOW_USERNAME:$AIRFLOW_PASSWORD" \
-            http://localhost:8080/api/v1/dags/ml_pipeline/dagRuns/$DAG_RUN_ID \
-            | jq -r '.state')
-          echo "Current state: $STATE"
-          if [ "$STATE" == "success" ]; then
-            echo "DAG execution succeeded."
-            exit 0
-          elif [ "$STATE" == "failed" ]; then
-            echo "DAG execution failed."
-            exit 1
+        while true; do
+          DAG_RUN_STATUS=$(curl -s -u "$AIRFLOW_USERNAME:$AIRFLOW_PASSWORD" \
+            http://$AIRFLOW_HOST:$AIRFLOW_PORT/api/v1/dags/$DAG_ID/dagRuns/$DAG_RUN_ID | jq -r '.state')
+          echo "Current DAG Run Status: $DAG_RUN_STATUS"
+          if [[ "$DAG_RUN_STATUS" != "running" ]]; then
+            break
           fi
           sleep 10
         done
-        echo "DAG did not complete within the expected time."
-        exit 1
 
-    # 17. Vérifier les logs du Scheduler
-    - name: Check Scheduler Logs
-      if: always()
+    # 6.5 Récupérer les tâches associées au DAG Run
+    - name: Fetch Tasks for DAG Run
+      id: fetch_tasks
       run: |
-        docker-compose logs airflow-scheduler
-
-    # 18. Redémarrer le Scheduler si nécessaire
-    - name: Restart Scheduler
-      if: always()
-      run: |
-        docker-compose restart airflow-scheduler
-
-    # 19. Lister les tâches associées au DAG Run
-    - name: List Task Instances
-      if: always()
-      run: |
-        export AIRFLOW_USERNAME=airflow
-        export AIRFLOW_PASSWORD=airflow
-        export DAG_RUN_ID=$DAG_RUN_ID
-        curl -s -u "$AIRFLOW_USERNAME:$AIRFLOW_PASSWORD" \
-          http://localhost:8080/api/v1/dags/ml_pipeline/dagRuns/$DAG_RUN_ID/taskInstances | jq
-
-    # 20. Vérifier l'état de chaque tâche
-    - name: Check Task States
-      if: always()
-      run: |
-        export AIRFLOW_USERNAME=airflow
-        export AIRFLOW_PASSWORD=airflow
-        export DAG_RUN_ID=$DAG_RUN_ID
         TASKS=$(curl -s -u "$AIRFLOW_USERNAME:$AIRFLOW_PASSWORD" \
-          http://localhost:8080/api/v1/dags/ml_pipeline/dagRuns/$DAG_RUN_ID/taskInstances \
-          | jq -r '.task_instances[] | "\(.task_id):\(.state)"')
-        for TASK in $TASKS; do
-          TASK_ID=$(echo $TASK | cut -d':' -f1)
-          TASK_STATE=$(echo $TASK | cut -d':' -f2)
-          echo "Task $TASK_ID is in state: $TASK_STATE"
+          http://$AIRFLOW_HOST:$AIRFLOW_PORT/api/v1/dags/$DAG_ID/dagRuns/$DAG_RUN_ID/taskInstances | jq -r '.task_instances[].task_id')
+        echo "TASKS=$TASKS" >> $GITHUB_ENV
+
+    # 6.6 Récupérer les logs et statuts des tâches
+    - name: Fetch Logs and Status for Tasks
+      run: |
+        for TASK_ID in ${{ env.TASKS }}; do
+          echo "Processing Task: $TASK_ID"
+          TASK_STATUS=$(curl -s -u "$AIRFLOW_USERNAME:$AIRFLOW_PASSWORD" \
+            http://$AIRFLOW_HOST:$AIRFLOW_PORT/api/v1/dags/$DAG_ID/dagRuns/$DAG_RUN_ID/taskInstances/$TASK_ID | jq -r '.state')
+          echo "Task Status: $TASK_STATUS"
+          LOG_DIR="$LOGS_PATH/dag_id=$DAG_ID/run_id=$DAG_RUN_ID/task_id=$TASK_ID"
+          if [ -d "$LOG_DIR" ]; then
+            echo "Logs Directory: $LOG_DIR"
+            find "$LOG_DIR" -type f -exec echo "Log File: {}" \; -exec cat {} \;
+          else
+            echo "Logs Directory Not Found for Task: $TASK_ID"
+          fi
         done
 
-    # 21. Récupérer les logs des tâches
-    - name: Fetch Task Logs
-      if: always()
-      run: |
-        export AIRFLOW_USERNAME=airflow
-        export AIRFLOW_PASSWORD=airflow
-        export DAG_RUN_ID=$DAG_RUN_ID
-        TASKS=$(curl -s -u "$AIRFLOW_USERNAME:$AIRFLOW_PASSWORD" \
-          http://localhost:8080/api/v1/dags/ml_pipeline/dagRuns/$DAG_RUN_ID/taskInstances \
-          | jq -r '.task_instances[].task_id')
-        for TASK_ID in $TASKS; do
-          echo "Fetching logs for Task: $TASK_ID"
-          LOGS=$(curl -s -u "$AIRFLOW_USERNAME:$AIRFLOW_PASSWORD" \
-            http://localhost:8080/api/v1/dags/ml_pipeline/dagRuns/$DAG_RUN_ID/taskInstances/$TASK_ID/logs)
-          echo "Logs for Task $TASK_ID:"
-          echo "$LOGS"
-          echo -e "\n---------------------------------------------\n"
-        done
-
-    # 22. Afficher les logs des conteneurs Docker
+    # 7. Afficher les logs des conteneurs Docker
     - name: Show Docker Compose Logs
       if: always()
       run: docker-compose -f docker-compose.yml logs
