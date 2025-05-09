@@ -61,11 +61,31 @@ jobs:
       run: |
         echo "Checking Airflow health..."
         echo "Using AIRFLOW_HOST: $AIRFLOW_HOST, AIRFLOW_PORT: $AIRFLOW_PORT"
-        RESPONSE=$(curl -v http://$AIRFLOW_HOST:$AIRFLOW_PORT/health)
-        echo "Response from Airflow health check:"
-        echo "$RESPONSE"
-        echo "$RESPONSE" | jq
-        echo "Airflow health check completed."
+        
+        for i in {1..10}; do
+          echo "Attempt $i: Checking health endpoint..."
+          RESPONSE=$(curl -s -w "\nHTTP_CODE:%{http_code}" http://$AIRFLOW_HOST:$AIRFLOW_PORT/health)
+          HTTP_CODE=$(echo "$RESPONSE" | grep "HTTP_CODE" | cut -d':' -f2)
+          JSON_BODY=$(echo "$RESPONSE" | sed '/HTTP_CODE/d')
+          
+          echo "HTTP Code: $HTTP_CODE"
+          echo "Response Body: $JSON_BODY"
+          
+          if [[ "$HTTP_CODE" == "200" ]]; then
+            echo "Airflow health check succeeded."
+            echo "$JSON_BODY" | jq
+            break
+          else
+            echo "Airflow health check failed. Retrying in 10 seconds..."
+            sleep 10
+          fi
+          
+          # If it's the last iteration and still failing, exit with error
+          if [[ "$i" == "10" ]]; then
+            echo "Airflow health check failed after 10 attempts. Exiting..."
+            exit 1
+          fi
+        done
 
     # 6.2 Activer le DAG s'il est désactivé
     - name: Activate Airflow DAG
