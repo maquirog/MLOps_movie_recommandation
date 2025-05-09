@@ -108,67 +108,26 @@ jobs:
         echo "Airflow DAG triggered with DAG_RUN_ID=$DAG_RUN_ID."
 
     # 6.4 Attendre que le DAG Run ne soit plus "running"
-    - name: Wait for DAG Run to Complete with Debugging
+    - name: Wait for DAG Run to Complete
       run: |
         echo "Waiting for DAG Run to complete..."
         echo "Using AIRFLOW_HOST: $AIRFLOW_HOST, AIRFLOW_PORT: $AIRFLOW_PORT, DAG_RUN_ID: $DAG_RUN_ID"
-        MAX_RETRIES=60  # Timeout après 10 minutes
-        RETRY_COUNT=0
-
         while true; do
-          RETRY_COUNT=$((RETRY_COUNT + 1))
-
-          # Récupérer le statut du DAG Run
+          # Obtenir le statut actuel du DAG Run
           DAG_RUN_STATUS=$(curl -s -u "$AIRFLOW_USERNAME:$AIRFLOW_PASSWORD" \
             http://$AIRFLOW_HOST:$AIRFLOW_PORT/api/v1/dags/$DAG_ID/dagRuns/$DAG_RUN_ID | jq -r '.state')
-          echo "$(date +"%Y-%m-%d %H:%M:%S") - Attempt $RETRY_COUNT: Current DAG Run Status: $DAG_RUN_STATUS"
+          echo "Current DAG Run Status: $DAG_RUN_STATUS"
 
-          # Si le statut du DAG Run n'est plus "running", sortir de la boucle
-          if [[ "$DAG_RUN_STATUS" != "running" ]]; then
+          # Continuer la boucle tant que le statut est "running" ou "queued"
+          if [[ "$DAG_RUN_STATUS" != "running" && "$DAG_RUN_STATUS" != "queued" ]]; then
             break
           fi
 
-          # Vérifier si le timeout est atteint
-          if [[ $RETRY_COUNT -ge $MAX_RETRIES ]]; then
-            echo "Timeout reached: DAG Run did not complete within the expected time."
-            exit 1
-          fi
-
+          # Attendre 10 secondes avant de réessayer
           sleep 10
         done
 
         echo "DAG Run completed with status: $DAG_RUN_STATUS."
-
-        # Si le DAG Run a échoué, collecter des informations de débogage
-        if [[ "$DAG_RUN_STATUS" == "failed" ]]; then
-          echo "DAG Run has failed. Collecting debugging information..."
-
-          # Récupérer les tâches associées au DAG Run
-          TASKS=$(curl -s -u "$AIRFLOW_USERNAME:$AIRFLOW_PASSWORD" \
-            http://$AIRFLOW_HOST:$AIRFLOW_PORT/api/v1/dags/$DAG_ID/dagRuns/$DAG_RUN_ID/taskInstances | jq -r '.task_instances[].task_id')
-          echo "Retrieved tasks: $TASKS"
-
-          # Déboguer chaque tâche
-          for TASK_ID in $TASKS; do
-            echo "Fetching status and logs for Task: $TASK_ID"
-
-            # Récupérer le statut de la tâche
-            TASK_STATUS=$(curl -s -u "$AIRFLOW_USERNAME:$AIRFLOW_PASSWORD" \
-              http://$AIRFLOW_HOST:$AIRFLOW_PORT/api/v1/dags/$DAG_ID/dagRuns/$DAG_RUN_ID/taskInstances/$TASK_ID | jq -r '.state')
-            echo "Task $TASK_ID Status: $TASK_STATUS"
-
-            # Chemin du répertoire des logs
-            LOG_DIR="$LOGS_PATH/dag_id=$DAG_ID/run_id=$DAG_RUN_ID/task_id=$TASK_ID"
-            echo "Checking logs in directory: $LOG_DIR"
-
-            if [ -d "$LOG_DIR" ]; then
-              echo "Logs Directory: $LOG_DIR"
-              find "$LOG_DIR" -type f -exec echo "Log File: {}" \; -exec cat {} \;
-            else
-              echo "Logs Directory Not Found for Task: $TASK_ID"
-            fi
-          done
-        fi
 
     # 6.5 Récupérer les tâches associées au DAG Run
     - name: Fetch Tasks for DAG Run
