@@ -11,14 +11,6 @@ on:
 jobs:
   deploy-and-debug:
     runs-on: ubuntu-latest
-    env:
-      AIRFLOW_HOST: "localhost"
-      AIRFLOW_PORT: "8080"
-      AIRFLOW_USERNAME: "airflow"
-      AIRFLOW_PASSWORD: "airflow"
-      DAG_ID: "ml_pipeline"
-      LOGS_PATH: "airflow/logs"
-
     steps:
     # 1. Checkout le code
     - name: Checkout Repository
@@ -33,7 +25,7 @@ jobs:
     # 3. Modifier les permissions sur les volumes
     - name: Change Permissions on Volumes
       run: |
-        sudo chmod -R 777 $LOGS_PATH
+        sudo chmod -R 777 airflow/logs/
         sudo chmod -R 777 airflow/dags/
         sudo chmod -R 777 airflow/plugins/
 
@@ -51,23 +43,23 @@ jobs:
     # 6.1 Vérification de la santé d'Airflow
     - name: Check Airflow Health
       run: |
-        curl -s http://$AIRFLOW_HOST:$AIRFLOW_PORT/health | jq
+        curl -s http://localhost:8080/health | jq
 
     # 6.2 Activer le DAG s'il est désactivé
     - name: Activate Airflow DAG
       run: |
-        curl -s -X PATCH http://$AIRFLOW_HOST:$AIRFLOW_PORT/api/v1/dags/$DAG_ID \
+        curl -s -X PATCH http://localhost:8080/api/v1/dags/ml_pipeline \
           -H "Content-Type: application/json" \
-          -u "$AIRFLOW_USERNAME:$AIRFLOW_PASSWORD" \
+          -u "airflow:airflow" \
           -d '{"is_paused": false}' | jq
 
     # 6.3 Déclencher le DAG
     - name: Trigger Airflow DAG
       id: trigger_dag
       run: |
-        DAG_RUN_RESPONSE=$(curl -s -X POST http://$AIRFLOW_HOST:$AIRFLOW_PORT/api/v1/dags/$DAG_ID/dagRuns \
+        DAG_RUN_RESPONSE=$(curl -s -X POST http://localhost:8080/api/v1/dags/ml_pipeline/dagRuns \
           -H "Content-Type: application/json" \
-          -u "$AIRFLOW_USERNAME:$AIRFLOW_PASSWORD" \
+          -u "airflow:airflow" \
           -d '{"conf": {}}')
         echo "DAG Run Response: $DAG_RUN_RESPONSE"
         DAG_RUN_ID=$(echo $DAG_RUN_RESPONSE | jq -r '.dag_run_id')
@@ -77,8 +69,8 @@ jobs:
     - name: Wait for DAG Run to Complete
       run: |
         while true; do
-          DAG_RUN_STATUS=$(curl -s -u "$AIRFLOW_USERNAME:$AIRFLOW_PASSWORD" \
-            http://$AIRFLOW_HOST:$AIRFLOW_PORT/api/v1/dags/$DAG_ID/dagRuns/$DAG_RUN_ID | jq -r '.state')
+          DAG_RUN_STATUS=$(curl -s -u "airflow:airflow" \
+            http://localhost:8080/api/v1/dags/ml_pipeline/dagRuns/$DAG_RUN_ID | jq -r '.state')
           echo "Current DAG Run Status: $DAG_RUN_STATUS"
           if [[ "$DAG_RUN_STATUS" != "running" ]]; then
             break
@@ -90,8 +82,8 @@ jobs:
     - name: Fetch Tasks for DAG Run
       id: fetch_tasks
       run: |
-        TASKS=$(curl -s -u "$AIRFLOW_USERNAME:$AIRFLOW_PASSWORD" \
-          http://$AIRFLOW_HOST:$AIRFLOW_PORT/api/v1/dags/$DAG_ID/dagRuns/$DAG_RUN_ID/taskInstances | jq -r '.task_instances[].task_id')
+        TASKS=$(curl -s -u "airflow:airflow" \
+          http://localhost:8080/api/v1/dags/ml_pipeline/dagRuns/$DAG_RUN_ID/taskInstances | jq -r '.task_instances[].task_id')
         echo "TASKS=$TASKS" >> $GITHUB_ENV
 
     # 6.6 Récupérer les logs et statuts des tâches
@@ -99,10 +91,10 @@ jobs:
       run: |
         for TASK_ID in ${{ env.TASKS }}; do
           echo "Processing Task: $TASK_ID"
-          TASK_STATUS=$(curl -s -u "$AIRFLOW_USERNAME:$AIRFLOW_PASSWORD" \
-            http://$AIRFLOW_HOST:$AIRFLOW_PORT/api/v1/dags/$DAG_ID/dagRuns/$DAG_RUN_ID/taskInstances/$TASK_ID | jq -r '.state')
+          TASK_STATUS=$(curl -s -u "airflow:airflow" \
+            http://localhost:8080/api/v1/dags/ml_pipeline/dagRuns/$DAG_RUN_ID/taskInstances/$TASK_ID | jq -r '.state')
           echo "Task Status: $TASK_STATUS"
-          LOG_DIR="$LOGS_PATH/dag_id=$DAG_ID/run_id=$DAG_RUN_ID/task_id=$TASK_ID"
+          LOG_DIR="airflow/logs/dag_id=ml_pipeline/run_id=$DAG_RUN_ID/task_id=$TASK_ID"
           if [ -d "$LOG_DIR" ]; then
             echo "Logs Directory: $LOG_DIR"
             find "$LOG_DIR" -type f -exec echo "Log File: {}" \; -exec cat {} \;
