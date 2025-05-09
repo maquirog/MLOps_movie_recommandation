@@ -129,10 +129,18 @@ jobs:
       run: |
         echo "Fetching tasks for DAG Run..."
         echo "Using AIRFLOW_HOST: $AIRFLOW_HOST, AIRFLOW_PORT: $AIRFLOW_PORT, DAG_RUN_ID: $DAG_RUN_ID"
-        TASKS=$(curl -v -u "$AIRFLOW_USERNAME:$AIRFLOW_PASSWORD" \
-          http://$AIRFLOW_HOST:$AIRFLOW_PORT/api/v1/dags/$DAG_ID/dagRuns/$DAG_RUN_ID/taskInstances | jq -r '.task_instances[].task_id')
+
+        # Récupérer les tâches et les convertir en une chaîne séparée par des virgules
+        TASKS=$(curl -s -u "$AIRFLOW_USERNAME:$AIRFLOW_PASSWORD" \
+          http://$AIRFLOW_HOST:$AIRFLOW_PORT/api/v1/dags/$DAG_ID/dagRuns/$DAG_RUN_ID/taskInstances | jq -r '.task_instances[].task_id | @csv' | tr '\n' ',')
+
+        # Nettoyer la dernière virgule (si nécessaire)
+        TASKS=${TASKS%,}
+
         echo "Retrieved tasks:"
         echo "$TASKS"
+
+        # Ajouter les tâches comme variable d'environnement
         echo "TASKS=$TASKS" >> $GITHUB_ENV
 
     # 6.6 Récupérer les logs et statuts des tâches
