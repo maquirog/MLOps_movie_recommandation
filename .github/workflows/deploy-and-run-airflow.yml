@@ -11,7 +11,7 @@ on:
 jobs:
   deploy-and-debug:
     runs-on: ubuntu-latest
-    env: # Variables globales pour le job
+    env:
       AIRFLOW_HOST: "localhost"
       AIRFLOW_PORT: "8080"
       AIRFLOW_USERNAME: "airflow"
@@ -24,11 +24,11 @@ jobs:
     - name: Checkout Repository
       uses: actions/checkout@v3
 
-    # 2. Installer Docker Compose
-    - name: Install Docker Compose
+    # 2. Installer les dépendances nécessaires (jq et Docker Compose)
+    - name: Install Dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y docker-compose
+        sudo apt-get install -y jq docker-compose
 
     # 3. Modifier les permissions sur les volumes
     - name: Change Permissions on Volumes
