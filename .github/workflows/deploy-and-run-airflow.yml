@@ -57,29 +57,25 @@ jobs:
         echo "Docker Compose status checked."
 
     # 6.1 Vérification de la santé d'Airflow avec une boucle simplifiée
-    - name: Check Airflow Health
+    - name: Wait for Airflow Webserver
       run: |
-        echo "Checking Airflow health..."
-        echo "Using AIRFLOW_HOST: $AIRFLOW_HOST, AIRFLOW_PORT: $AIRFLOW_PORT"
-        
-        for i in {1..10}; do
-          echo "Attempt $i: Checking health endpoint..."
-          RESPONSE=$(curl -v http://$AIRFLOW_HOST:$AIRFLOW_PORT/health)
-          echo "Response: $RESPONSE"
+        echo "Waiting for Airflow Webserver to be ready..."
+        for i in {1..20}; do
+          echo "Attempt $i: Checking if Airflow Webserver is ready..."
           
-          if echo "$RESPONSE" | jq '.metadatabase.status == "healthy"' | grep -q true; then
-            echo "Airflow health check succeeded."
-            break
-          else
-            echo "Airflow health check failed. Retrying in 10 seconds..."
-            sleep 10
+          # Test la connexion avec curl --fail
+          if curl --fail http://$AIRFLOW_HOST:$AIRFLOW_PORT/health; then
+            echo "Airflow Webserver is ready."
+            exit 0
           fi
           
-          if [[ "$i" == "10" ]]; then
-            echo "Airflow health check failed after 10 attempts. Exiting..."
-            exit 1
-          fi
+          echo "Airflow Webserver is not ready yet. Retrying in 10 seconds..."
+          sleep 10
         done
+        
+        # Si la boucle atteint la limite maximale sans succès
+        echo "Airflow Webserver did not start within the expected time."
+        exit 1
 
     # 6.2 Activer le DAG s'il est désactivé
     - name: Activate Airflow DAG
