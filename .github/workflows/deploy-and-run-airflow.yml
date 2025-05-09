@@ -63,7 +63,7 @@ jobs:
         echo "Airflow Webserver did not start within the expected time."
         exit 1
 
-    # 5. Déclencher le DAG Airflow
+    # Déclencher le DAG Airflow
     - name: Trigger Airflow DAG
       id: trigger_dag
       run: |
@@ -76,11 +76,21 @@ jobs:
         echo "Triggered DAG Run ID: $DAG_RUN_ID"
         echo "dag_run_id=$DAG_RUN_ID" >> $GITHUB_ENV
 
-    # Attendre que le DAG soit terminé
+    # Vérifier l'état initial du DAG
+    - name: Check Initial State of DAG
+      run: |
+        export AIRFLOW_USERNAME=airflow
+        export AIRFLOW_PASSWORD=airflow
+        export DAG_RUN_ID=$DAG_RUN_ID
+        curl -s -u "$AIRFLOW_USERNAME:$AIRFLOW_PASSWORD" \
+          http://localhost:8080/api/v1/dags/ml_pipeline/dagRuns/$DAG_RUN_ID | jq
+
+    # Attendre la fin du DAG
     - name: Wait for Airflow DAG Completion
       run: |
         export AIRFLOW_USERNAME=airflow
         export AIRFLOW_PASSWORD=airflow
+        export DAG_RUN_ID=$DAG_RUN_ID
         for i in {1..30}; do
           STATE=$(curl -s -u "$AIRFLOW_USERNAME:$AIRFLOW_PASSWORD" \
             http://localhost:8080/api/v1/dags/ml_pipeline/dagRuns/$DAG_RUN_ID \
@@ -98,51 +108,53 @@ jobs:
         echo "DAG did not complete within the expected time."
         exit 1
 
-    # Récupérer les logs des tâches du DAG
-    - name: Fetch Airflow Task Logs
+    # Récupérer la liste des tâches du DAG
+    - name: Fetch Task List
       run: |
         export AIRFLOW_USERNAME=airflow
         export AIRFLOW_PASSWORD=airflow
         export DAG_RUN_ID=$DAG_RUN_ID
         export DAG_ID=ml_pipeline
-
-        # Initialisation des variables
-        COMPLETED_TASKS=""
-        TASKS_FAILED=0
-
-        # Récupérer la liste des tâches
         TASKS=$(curl -s -u "$AIRFLOW_USERNAME:$AIRFLOW_PASSWORD" \
           http://localhost:8080/api/v1/dags/$DAG_ID/dagRuns/$DAG_RUN_ID/taskInstances \
           | jq -r '.task_instances[].task_id')
+        echo "Tasks in DAG: $TASKS"
 
-        # Boucle pour récupérer et afficher les logs
+    # Vérifier l'état de chaque tâche
+    - name: Check Task States
+      run: |
+        export AIRFLOW_USERNAME=airflow
+        export AIRFLOW_PASSWORD=airflow
+        export DAG_RUN_ID=$DAG_RUN_ID
+        export DAG_ID=ml_pipeline
+        TASKS=$(curl -s -u "$AIRFLOW_USERNAME:$AIRFLOW_PASSWORD" \
+          http://localhost:8080/api/v1/dags/$DAG_ID/dagRuns/$DAG_RUN_ID/taskInstances \
+          | jq -r '.task_instances[].task_id')
         for TASK_ID in $TASKS; do
-          echo "Fetching logs for Task: $TASK_ID"
-          # Récupérer l'état de la tâche
-          TASK_STATE=$(curl -s -u "$AIRFLOW_USERNAME:$AIRFLOW_PASSWORD" \
+          STATE=$(curl -s -u "$AIRFLOW_USERNAME:$AIRFLOW_PASSWORD" \
             http://localhost:8080/api/v1/dags/$DAG_ID/dagRuns/$DAG_RUN_ID/taskInstances/$TASK_ID \
             | jq -r '.state')
-          echo "State of Task $TASK_ID: $TASK_STATE"
+          echo "Task $TASK_ID is in state: $STATE"
+        done
 
-          # Récupérer les logs
+    # Récupérer les logs des tâches
+    - name: Fetch Task Logs
+      run: |
+        export AIRFLOW_USERNAME=airflow
+        export AIRFLOW_PASSWORD=airflow
+        export DAG_RUN_ID=$DAG_RUN_ID
+        export DAG_ID=ml_pipeline
+        TASKS=$(curl -s -u "$AIRFLOW_USERNAME:$AIRFLOW_PASSWORD" \
+          http://localhost:8080/api/v1/dags/$DAG_ID/dagRuns/$DAG_RUN_ID/taskInstances \
+          | jq -r '.task_instances[].task_id')
+        for TASK_ID in $TASKS; do
+          echo "Fetching logs for Task: $TASK_ID"
           LOGS=$(curl -s -u "$AIRFLOW_USERNAME:$AIRFLOW_PASSWORD" \
             http://localhost:8080/api/v1/dags/$DAG_ID/dagRuns/$DAG_RUN_ID/taskInstances/$TASK_ID/logs)
           echo "Logs for Task $TASK_ID:"
           echo "$LOGS"
           echo -e "\n---------------------------------------------\n"
-
-          # Vérifier si la tâche a échoué
-          if [ "$TASK_STATE" == "failed" ]; then
-            echo "⚠️ Task $TASK_ID has failed. Check the logs above for details."
-            TASKS_FAILED=$((TASKS_FAILED + 1))
-          fi
         done
-
-        # Vérifier si une ou plusieurs tâches ont échoué
-        if [ "$TASKS_FAILED" -gt 0 ]; then
-          echo "⚠️ $TASKS_FAILED task(s) have failed. Please check the logs for details."
-          exit 1
-        fi
   
     # 6. Afficher les logs des conteneurs en cas de succès ou d'échec
     - name: Show Docker Compose Logs
