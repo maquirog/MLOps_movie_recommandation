@@ -132,7 +132,7 @@ jobs:
 
         # Récupérer les tâches et les convertir en une chaîne séparée par des virgules
         TASKS=$(curl -s -u "$AIRFLOW_USERNAME:$AIRFLOW_PASSWORD" \
-          http://$AIRFLOW_HOST:$AIRFLOW_PORT/api/v1/dags/$DAG_ID/dagRuns/$DAG_RUN_ID/taskInstances | jq -r '.task_instances[].task_id | @csv' | tr '\n' ',')
+          http://$AIRFLOW_HOST:$AIRFLOW_PORT/api/v1/dags/$DAG_ID/dagRuns/$DAG_RUN_ID/taskInstances | jq -r '.task_instances[].task_id' | tr '\n' ',')
 
         # Nettoyer la dernière virgule (si nécessaire)
         TASKS=${TASKS%,}
