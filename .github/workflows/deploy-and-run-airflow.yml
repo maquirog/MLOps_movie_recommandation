@@ -139,8 +139,8 @@ jobs:
     - name: Fetch Logs and Status for Tasks
       run: |
         echo "Fetching logs and status for tasks..."
-        echo "Using TASKS: ${{ env.TASKS }}"
-        for TASK_ID in ${{ env.TASKS }}; do
+        echo "Using TASKS: $TASKS"
+        for TASK_ID in $TASKS; do
           echo "Processing Task: $TASK_ID"
           TASK_STATUS=$(curl -v -u "$AIRFLOW_USERNAME:$AIRFLOW_PASSWORD" \
             http://$AIRFLOW_HOST:$AIRFLOW_PORT/api/v1/dags/$DAG_ID/dagRuns/$DAG_RUN_ID/taskInstances/$TASK_ID | jq -r '.state')
