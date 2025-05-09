@@ -108,20 +108,20 @@ jobs:
         echo "Airflow DAG triggered with DAG_RUN_ID=$DAG_RUN_ID."
 
     # 6.4 Attendre que le DAG Run ne soit plus "running"
-    - name: Wait for DAG Run to Complete
-      run: |
-        echo "Waiting for DAG Run to complete..."
-        echo "Using AIRFLOW_HOST: $AIRFLOW_HOST, AIRFLOW_PORT: $AIRFLOW_PORT, DAG_RUN_ID: $DAG_RUN_ID"
-        while true; do
-          DAG_RUN_STATUS=$(curl -v -u "$AIRFLOW_USERNAME:$AIRFLOW_PASSWORD" \
-            http://$AIRFLOW_HOST:$AIRFLOW_PORT/api/v1/dags/$DAG_ID/dagRuns/$DAG_RUN_ID | jq -r '.state')
-          echo "Current DAG Run Status: $DAG_RUN_STATUS"
-          if [[ "$DAG_RUN_STATUS" != "running" ]]; then
-            break
-          fi
-          sleep 10
-        done
-        echo "DAG Run completed with status: $DAG_RUN_STATUS."
+    # - name: Wait for DAG Run to Complete
+    #   run: |
+    #     echo "Waiting for DAG Run to complete..."
+    #     echo "Using AIRFLOW_HOST: $AIRFLOW_HOST, AIRFLOW_PORT: $AIRFLOW_PORT, DAG_RUN_ID: $DAG_RUN_ID"
+    #     while true; do
+    #       DAG_RUN_STATUS=$(curl -v -u "$AIRFLOW_USERNAME:$AIRFLOW_PASSWORD" \
+    #         http://$AIRFLOW_HOST:$AIRFLOW_PORT/api/v1/dags/$DAG_ID/dagRuns/$DAG_RUN_ID | jq -r '.state')
+    #       echo "Current DAG Run Status: $DAG_RUN_STATUS"
+    #       if [[ "$DAG_RUN_STATUS" != "running" ]]; then
+    #         break
+    #       fi
+    #       sleep 10
+    #     done
+    #     echo "DAG Run completed with status: $DAG_RUN_STATUS."
 
     # 6.5 Récupérer les tâches associées au DAG Run
     - name: Fetch Tasks for DAG Run
@@ -130,12 +130,9 @@ jobs:
         echo "Fetching tasks for DAG Run..."
         echo "Using AIRFLOW_HOST: $AIRFLOW_HOST, AIRFLOW_PORT: $AIRFLOW_PORT, DAG_RUN_ID: $DAG_RUN_ID"
 
-        # Récupérer les tâches et les convertir en une chaîne séparée par des virgules
+        # Récupérer les tâches et les convertir en une liste séparée par des espaces
         TASKS=$(curl -s -u "$AIRFLOW_USERNAME:$AIRFLOW_PASSWORD" \
-          http://$AIRFLOW_HOST:$AIRFLOW_PORT/api/v1/dags/$DAG_ID/dagRuns/$DAG_RUN_ID/taskInstances | jq -r '.task_instances[].task_id' | tr '\n' ',')
-
-        # Nettoyer la dernière virgule (si nécessaire)
-        TASKS=${TASKS%,}
+          http://$AIRFLOW_HOST:$AIRFLOW_PORT/api/v1/dags/$DAG_ID/dagRuns/$DAG_RUN_ID/taskInstances | jq -r '.task_instances[].task_id' | tr '\n' ' ')
 
         echo "Retrieved tasks:"
         echo "$TASKS"
