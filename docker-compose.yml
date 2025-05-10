@@ -26,7 +26,7 @@ x-airflow-common: &airflow-common
     - /var/run/docker.sock:/var/run/docker.sock
   user: "${AIRFLOW_UID:-50000}:${AIRFLOW_GID:-50000}"
   group_add:
-    - 998
+    - "${DOCKER_GID}"
   depends_on:
     redis:
       condition: service_healthy
