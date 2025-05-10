@@ -8,50 +8,60 @@ on:
       - synchronize
       - reopened
 
-env: # Declare global environment variables
-  AIRFLOW_UID: 50000
-  DOCKER_GROUP_GID: "" # Placeholder; will be updated dynamically
-
-jobs:
-  run-airflow:
-    runs-on: ubuntu-latest
-    steps:
-      # Step 1: Checkout the repository
-      - name: Checkout code
-        uses: actions/checkout@v3
-
-      # Step 2: Install Python and Airflow
-      - name: Install Python and Airflow
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y python3 python3-pip
-          pip3 install -r requirements.txt
-          pip3 install apache-airflow
-
-      # Step 3: Detect Docker Group ID (GID)
-      - name: Detect Docker Group ID
-        id: detect-docker-gid
-        run: |
-          DOCKER_GROUP_GID=$(getent group docker | cut -d: -f3)
-          echo "Docker Group GID: $DOCKER_GROUP_GID"
-          echo "DOCKER_GROUP_GID=$DOCKER_GROUP_GID" >> $GITHUB_ENV
-
-      # Step 4: Create Airflow User with Correct GID
-      - name: Create Airflow User with Docker Permissions
-        run: |
-          sudo groupadd -g $DOCKER_GROUP_GID docker || echo "Docker group already exists"
-          sudo useradd -m -u $AIRFLOW_UID -g $DOCKER_GROUP_GID airflow || echo "Airflow user already exists"
-          sudo usermod -aG docker airflow
-          id airflow
-
-      # Step 5: Adjust Docker Socket Permissions
-      - name: Fix Docker Socket Permissions
-        run: |
-          sudo chmod 666 /var/run/docker.sock
-
-      # Step 6: Setup Airflow Logs Directory
-      - name: Setup Airflow Logs Directory
-        run: |
-          sudo mkdir -p airflow/logs
-          sudo chown airflow:docker airflow/logs
-          sudo chmod -R 755 airflow/logs
+      env: # Declare global environment variables
+      AIRFLOW_UID: 50000
+      DOCKER_GROUP_GID: "" # Placeholder; will be updated dynamically
+    
+    jobs:
+      run-airflow:
+        runs-on: ubuntu-latest
+        steps:
+          # Step 1: Checkout the repository
+          - name: Checkout code (Before)
+            run: ls -l && pwd
+          - name: Checkout code
+            uses: actions/checkout@v3
+          - name: Checkout code (After)
+            run: ls -l && pwd
+    
+          # Step 2: Install Docker and Docker Compose
+          - name: Install Docker and Docker Compose (Before)
+            run: docker --version || echo "Docker not installed"
+          - name: Install Docker and Docker Compose
+            run: |
+              sudo apt-get update
+              sudo apt-get install -y docker-compose
+          - name: Install Docker and Docker Compose (After)
+            run: docker --version
+    
+          # Step 3: Detect Docker Group ID (GID)
+          - name: Detect Docker Group ID (Before)
+            run: getent group docker || echo "Docker group not found"
+          - name: Detect Docker Group ID
+            id: detect-docker-gid
+            run: |
+              DOCKER_GROUP_GID=$(getent group docker | cut -d: -f3)
+              echo "Docker Group GID: $DOCKER_GROUP_GID"
+              echo "DOCKER_GROUP_GID=$DOCKER_GROUP_GID" >> $GITHUB_ENV
+          - name: Detect Docker Group ID (After)
+            run: echo "Docker Group GID: ${{ env.DOCKER_GROUP_GID }}"
+    
+          # Step 4: Create Airflow User with Correct GID
+          - name: Create Airflow User with Docker Permissions (Before)
+            run: id airflow || echo "Airflow user not found"
+          - name: Create Airflow User with Docker Permissions
+            run: |
+              sudo groupadd -g $DOCKER_GROUP_GID docker || echo "Docker group already exists"
+              sudo useradd -m -u $AIRFLOW_UID -g $DOCKER_GROUP_GID airflow || echo "Airflow user already exists"
+              sudo usermod -aG docker airflow
+          - name: Create Airflow User with Docker Permissions (After)
+            run: id airflow
+    
+          # Step 5: Run Airflow Tasks
+          - name: Run Airflow Task (Before)
+            run: ls -l && pwd
+          - name: Run Airflow Task
+            run: |
+              sudo -u airflow ./airflow tasks run ml_pipeline import_data manual__2025-05-10T07:16:19.564947+00:00
+          - name: Run Airflow Task (After)
+            run: ls -l && pwd
