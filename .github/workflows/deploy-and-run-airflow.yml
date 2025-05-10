@@ -32,6 +32,17 @@ jobs:
         sudo apt-get install -y jq docker-compose
         echo "Dependencies installed successfully."
 
+    # 2.1. Exporter le Docker Group ID
+    - name: Export Docker Group ID
+      id: export_docker_gid
+      run: |
+        echo "Retrieving Docker Group ID..."
+        DOCKER_GID=$(getent group docker | cut -d: -f3)
+        echo "Docker Group ID: $DOCKER_GID"
+        
+        # Expose DOCKER_GID as an environment variable for subsequent steps
+        echo "DOCKER_GID=$DOCKER_GID" >> $GITHUB_ENV
+
     # 3. Modifier les permissions sur les volumes
     - name: Change Permissions on Volumes
       run: |
@@ -43,8 +54,10 @@ jobs:
 
     # 4. Construire et démarrer les services avec Docker Compose
     - name: Start Docker Compose Services
+      env:
+        DOCKER_GID: $DOCKER_GID
       run: |
-        echo "Starting Docker Compose services..."
+        echo "Starting Docker Compose services with Docker Group ID..."
         docker-compose -f docker-compose.yml up -d
         echo "Docker Compose services started successfully."
 
@@ -146,7 +159,14 @@ jobs:
         # Ajouter les tâches comme variable d'environnement
         echo "TASKS=$TASKS" >> $GITHUB_ENV
 
-    # 6.6 Récupérer les logs et statuts des tâches
+    # 6.6 Vérifier le contenu du répertoire des logs du DAG
+    - name: Check Logs Directory
+      run: |
+        echo "Checking logs directory for DAG ID: $DAG_ID..."
+        ls -la airflow/logs/dag_id=$DAG_ID
+        echo "Logs directory content listed successfully."
+
+    # 6.7 Récupérer les logs et statuts des tâches
     - name: Fetch Logs and Status for Tasks
       run: |
         echo "Fetching logs and status for tasks..."
