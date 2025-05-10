@@ -1,0 +1,92 @@
+name: Check Permissions Before and After Each Step
+
+on:
+  workflow_dispatch:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+
+jobs:
+  check-permissions:
+    runs-on: ubuntu-latest  # GitHub-hosted runner
+    steps:
+      # Step 1: Checkout the repository
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      # Step 2: Before and after installing Docker
+      - name: Check permissions before installing Docker
+        run: |
+          echo "Before installing Docker:"
+          id
+          ls -l /var/run/docker.sock || echo "Docker socket not found"
+
+      - name: Install Docker
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y docker.io
+
+      - name: Check permissions after installing Docker
+        run: |
+          echo "After installing Docker:"
+          id
+          ls -l /var/run/docker.sock || echo "Docker socket not found"
+
+      # Step 3: Before and after adding the Airflow user to the Docker group
+      - name: Check permissions before adding Airflow user to Docker group
+        run: |
+          echo "Before adding Airflow user to Docker group:"
+          id
+          ls -l /var/run/docker.sock || echo "Docker socket not found"
+
+      - name: Add Airflow user to Docker group
+        run: |
+          sudo usermod -aG docker airflow || echo "User airflow does not exist, skipping."
+
+      - name: Check permissions after adding Airflow user to Docker group
+        run: |
+          echo "After adding Airflow user to Docker group:"
+          id
+          ls -l /var/run/docker.sock || echo "Docker socket not found"
+
+      # Step 4: Before and after fixing Docker socket permissions
+      - name: Check permissions before fixing Docker socket permissions
+        run: |
+          echo "Before fixing Docker socket permissions:"
+          id
+          ls -l /var/run/docker.sock || echo "Docker socket not found"
+
+      - name: Fix Docker socket permissions
+        run: |
+          sudo chmod 666 /var/run/docker.sock
+
+      - name: Check permissions after fixing Docker socket permissions
+        run: |
+          echo "After fixing Docker socket permissions:"
+          id
+          ls -l /var/run/docker.sock
+
+      # Step 5: Before and after fixing permissions for Airflow directories
+      - name: Check permissions before fixing Airflow directory permissions
+        run: |
+          echo "Before fixing Airflow directory permissions:"
+          ls -ld /path/to/airflow/logs || echo "Logs directory not found"
+          ls -ld /tmp || echo "Temporary directory not found"
+
+      - name: Fix permissions for Airflow directories
+        run: |
+          sudo chmod -R 755 /path/to/airflow/logs || echo "Logs directory not found, skipping."
+          sudo chmod -R 755 /tmp || echo "Temporary directory not found, skipping."
+
+      - name: Check permissions after fixing Airflow directory permissions
+        run: |
+          echo "After fixing Airflow directory permissions:"
+          ls -ld /path/to/airflow/logs || echo "Logs directory not found"
+          ls -ld /tmp || echo "Temporary directory not found"
+
+      # Step 6: Run Airflow Tasks and Validate
+      - name: Run Airflow Task
+        run: |
+          airflow tasks run ml_pipeline import_data manual__2025-05-10T07:16:19.564947+00:00
