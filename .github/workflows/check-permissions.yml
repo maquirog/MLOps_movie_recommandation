@@ -44,7 +44,8 @@ jobs:
           echo "Docker Group GID: $DOCKER_GROUP_GID"
           echo "DOCKER_GROUP_GID=$DOCKER_GROUP_GID" >> $GITHUB_ENV
       - name: Detect Docker Group ID (After)
-        run: echo "Docker Group GID: ${{ env.DOCKER_GROUP_GID }}"
+        run: |
+          echo "Docker Group GID: $DOCKER_GROUP_GID"
 
       # Step 4: Create Airflow User with Correct GID
       - name: Create Airflow User with Docker Permissions (Before)
