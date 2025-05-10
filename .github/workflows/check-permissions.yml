@@ -8,85 +8,50 @@ on:
       - synchronize
       - reopened
 
+env: # Declare global environment variables
+  AIRFLOW_UID: 50000
+  DOCKER_GROUP_GID: "" # Placeholder; will be updated dynamically
+
 jobs:
-  check-permissions:
-    runs-on: ubuntu-latest  # GitHub-hosted runner
+  run-airflow:
+    runs-on: ubuntu-latest
     steps:
       # Step 1: Checkout the repository
       - name: Checkout code
         uses: actions/checkout@v3
 
-      # Step 2: Before and after installing Docker
-      - name: Check permissions before installing Docker
-        run: |
-          echo "Before installing Docker:"
-          id
-          ls -l /var/run/docker.sock || echo "Docker socket not found"
-
-      - name: Install Docker
+      # Step 2: Install Python and Airflow
+      - name: Install Python and Airflow
         run: |
           sudo apt-get update
-          sudo apt-get install -y docker-compose
+          sudo apt-get install -y python3 python3-pip
+          pip3 install -r requirements.txt
+          pip3 install apache-airflow
 
-      - name: Check permissions after installing Docker
+      # Step 3: Detect Docker Group ID (GID)
+      - name: Detect Docker Group ID
+        id: detect-docker-gid
         run: |
-          echo "After installing Docker:"
-          id
-          ls -l /var/run/docker.sock || echo "Docker socket not found"
+          DOCKER_GROUP_GID=$(getent group docker | cut -d: -f3)
+          echo "Docker Group GID: $DOCKER_GROUP_GID"
+          echo "DOCKER_GROUP_GID=$DOCKER_GROUP_GID" >> $GITHUB_ENV
 
-      # Step 3: Before and after adding the Airflow user to the Docker group
-      - name: Check permissions before adding Airflow user to Docker group
+      # Step 4: Create Airflow User with Correct GID
+      - name: Create Airflow User with Docker Permissions
         run: |
-          echo "Before adding Airflow user to Docker group:"
-          id
-          ls -l /var/run/docker.sock || echo "Docker socket not found"
+          sudo groupadd -g $DOCKER_GROUP_GID docker || echo "Docker group already exists"
+          sudo useradd -m -u $AIRFLOW_UID -g $DOCKER_GROUP_GID airflow || echo "Airflow user already exists"
+          sudo usermod -aG docker airflow
+          id airflow
 
-      - name: Add Airflow user to Docker group
-        run: |
-          sudo usermod -aG docker airflow || echo "User airflow does not exist, skipping."
-
-      - name: Check permissions after adding Airflow user to Docker group
-        run: |
-          echo "After adding Airflow user to Docker group:"
-          id
-          ls -l /var/run/docker.sock || echo "Docker socket not found"
-
-      # Step 4: Before and after fixing Docker socket permissions
-      - name: Check permissions before fixing Docker socket permissions
-        run: |
-          echo "Before fixing Docker socket permissions:"
-          id
-          ls -l /var/run/docker.sock || echo "Docker socket not found"
-
-      - name: Fix Docker socket permissions
+      # Step 5: Adjust Docker Socket Permissions
+      - name: Fix Docker Socket Permissions
         run: |
           sudo chmod 666 /var/run/docker.sock
 
-      - name: Check permissions after fixing Docker socket permissions
+      # Step 6: Setup Airflow Logs Directory
+      - name: Setup Airflow Logs Directory
         run: |
-          echo "After fixing Docker socket permissions:"
-          id
-          ls -l /var/run/docker.sock
-
-      # Step 5: Before and after fixing permissions for Airflow directories
-      - name: Check permissions before fixing Airflow directory permissions
-        run: |
-          echo "Before fixing Airflow directory permissions:"
-          ls -ld /path/to/airflow/logs || echo "Logs directory not found"
-          ls -ld /tmp || echo "Temporary directory not found"
-
-      - name: Fix permissions for Airflow directories
-        run: |
-          sudo chmod -R 755 /path/to/airflow/logs || echo "Logs directory not found, skipping."
-          sudo chmod -R 755 /tmp || echo "Temporary directory not found, skipping."
-
-      - name: Check permissions after fixing Airflow directory permissions
-        run: |
-          echo "After fixing Airflow directory permissions:"
-          ls -ld /path/to/airflow/logs || echo "Logs directory not found"
-          ls -ld /tmp || echo "Temporary directory not found"
-
-      # Step 6: Run Airflow Tasks and Validate
-      - name: Run Airflow Task
-        run: |
-          airflow tasks run ml_pipeline import_data manual__2025-05-10T07:16:19.564947+00:00
+          sudo mkdir -p airflow/logs
+          sudo chown airflow:docker airflow/logs
+          sudo chmod -R 755 airflow/logs
