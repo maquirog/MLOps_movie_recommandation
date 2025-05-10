@@ -29,19 +29,8 @@ jobs:
       run: |
         echo "Installing dependencies..."
         sudo apt-get update
-        sudo apt-get install -y jq docker-compose
+        sudo apt-get install -y tree docker-compose
         echo "Dependencies installed successfully."
-
-    # 2.1. Exporter le Docker Group ID
-    - name: Export Docker Group ID
-      id: export_docker_gid
-      run: |
-        echo "Retrieving Docker Group ID..."
-        DOCKER_GID=$(getent group docker | cut -d: -f3)
-        echo "Docker Group ID: $DOCKER_GID"
-        
-        # Expose DOCKER_GID as an environment variable for subsequent steps
-        echo "DOCKER_GID=$DOCKER_GID" >> $GITHUB_ENV
 
     # 3. Modifier les permissions sur les volumes
     - name: Change Permissions on Volumes
@@ -52,13 +41,24 @@ jobs:
         sudo chmod -R 777 airflow/plugins/
         echo "Permissions changed successfully."
 
+    - name: Print Current Folder Arborescence
+      run: |
+        echo "Current folder structure:"
+        tree || (echo "'tree' command not found, using 'find' as a fallback:" && find .)
+
     # 4. Construire et démarrer les services avec Docker Compose
     - name: Start Docker Compose Services
-      env:
-        DOCKER_GID: $DOCKER_GID
       run: |
-        echo "Starting Docker Compose services with Docker Group ID..."
-        docker-compose -f docker-compose.yml up -d
+        echo "Retrieving Docker Group ID..."
+        DOCKER_GID=$(getent group docker | cut -d: -f3)
+        AIRFLOW_UID=1000
+        AIRFLOW_GID=0
+        echo "DOCKER_GID=$DOCKER_GID" > .env
+        echo "AIRFLOW_UID=$AIRFLOW_UID" >> .env
+        echo "AIRFLOW_GID=$AIRFLOW_GID" >> .env
+    
+        echo "Starting Docker Compose services..."
+        docker-compose -f docker-compose.yml --env-file .env up -d
         echo "Docker Compose services started successfully."
 
     # 5. Vérifier l'état des services Docker Compose
@@ -125,21 +125,34 @@ jobs:
       run: |
         echo "Waiting for DAG Run to complete..."
         echo "Using AIRFLOW_HOST: $AIRFLOW_HOST, AIRFLOW_PORT: $AIRFLOW_PORT, DAG_RUN_ID: $DAG_RUN_ID"
+    
+        MAX_RETRIES=10
+        RETRY_COUNT=0
+    
         while true; do
+          # Increment the retry counter
+          RETRY_COUNT=$((RETRY_COUNT + 1))
+    
           # Obtenir le statut actuel du DAG Run
           DAG_RUN_STATUS=$(curl -s -u "$AIRFLOW_USERNAME:$AIRFLOW_PASSWORD" \
             http://$AIRFLOW_HOST:$AIRFLOW_PORT/api/v1/dags/$DAG_ID/dagRuns/$DAG_RUN_ID | jq -r '.state')
-          echo "Current DAG Run Status: $DAG_RUN_STATUS"
-
-          # Continuer la boucle tant que le statut est "running" ou "queued"
+          echo "Attempt $RETRY_COUNT: Current DAG Run Status: $DAG_RUN_STATUS"
+    
+          # Break the loop if the status is not "running" or "queued"
           if [[ "$DAG_RUN_STATUS" != "running" && "$DAG_RUN_STATUS" != "queued" ]]; then
             break
           fi
-
-          # Attendre 10 secondes avant de réessayer
+    
+          # Break the loop if the retry count exceeds the maximum retries
+          if [[ $RETRY_COUNT -ge $MAX_RETRIES ]]; then
+            echo "Maximum retries reached. Exiting."
+            exit 1
+          fi
+    
+          # Wait 10 seconds before retrying
           sleep 10
         done
-
+    
         echo "DAG Run completed with status: $DAG_RUN_STATUS."
 
     # 6.5 Récupérer les tâches associées au DAG Run
