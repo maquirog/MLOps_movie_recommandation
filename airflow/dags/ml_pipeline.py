@@ -2,6 +2,8 @@ from airflow import DAG
 from airflow.providers.docker.operators.docker import DockerOperator
 from docker.types import Mount
 from datetime import datetime
+import os
+
 
 default_args = {
     'owner': 'airflow',
@@ -10,6 +12,10 @@ default_args = {
 
 # Fonction pour créer un DockerOperator
 def create_docker_task(task_id, image, command):
+    # Dynamically determine the base directory (where this script is located)
+    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir, os.pardir))
+    print(f"Base directory for mounts: {base_dir}")
+
     return DockerOperator(
         task_id=task_id,
         image=image,
@@ -18,12 +24,12 @@ def create_docker_task(task_id, image, command):
         docker_url='unix://var/run/docker.sock',
         network_mode='bridge',
         mounts=[
-            Mount(source='/home/ubuntu/MLOps_movie_recommandation/data', target='/app/data', type='bind'),
-            Mount(source='/home/ubuntu/MLOps_movie_recommandation/models', target='/app/models', type='bind'),
-            Mount(source='/home/ubuntu/MLOps_movie_recommandation/metrics', target='/app/metrics', type='bind'),
-            Mount(source='/home/ubuntu/MLOps_movie_recommandation/airflow/dags', target='/opt/airflow/dags', type='bind'),
-            Mount(source='/home/ubuntu/MLOps_movie_recommandation/airflow/logs', target='/opt/airflow/logs', type='bind'),
-            Mount(source='/home/ubuntu/MLOps_movie_recommandation/airflow/plugins', target='/opt/airflow/plugins', type='bind'),
+            Mount(source=os.path.join(base_dir, 'data'), target='/app/data', type='bind'),
+            Mount(source=os.path.join(base_dir, 'models'), target='/app/models', type='bind'),
+            Mount(source=os.path.join(base_dir, 'metrics'), target='/app/metrics', type='bind'),
+            Mount(source=os.path.join(base_dir, 'airflow/dags'), target='/opt/airflow/dags', type='bind'),
+            Mount(source=os.path.join(base_dir, 'airflow/logs'), target='/opt/airflow/logs', type='bind'),
+            Mount(source=os.path.join(base_dir, 'airflow/plugins'), target='/opt/airflow/plugins', type='bind'),
             Mount(source='/var/run/docker.sock', target='/var/run/docker.sock', type='bind'),
         ],
         force_pull=False,

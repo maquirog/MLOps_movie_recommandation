@@ -121,43 +121,102 @@ jobs:
         echo "Airflow DAG triggered with DAG_RUN_ID=$DAG_RUN_ID."
 
     # 6.4 Attendre que le DAG Run ne soit plus "running"
-    - name: Wait for DAG Run to Complete
+    - name: Debug DAG Run and Fetch Logs from Current Folder
       run: |
-        echo "Waiting for DAG Run to complete..."
-        echo "Using AIRFLOW_HOST: $AIRFLOW_HOST, AIRFLOW_PORT: $AIRFLOW_PORT, DAG_RUN_ID: $DAG_RUN_ID"
+        echo "Starting DAG Run Debugging and Log Fetching..."
+        echo "Using AIRFLOW_HOST: $AIRFLOW_HOST, AIRFLOW_PORT: $AIRFLOW_PORT, AIRFLOW_LOGS_PATH: $AIRFLOW_LOGS_PATH"
+        echo "DAG_ID: $DAG_ID"
     
-        MAX_RETRIES=10
+        # Fetch all DAG_RUN_IDs for the given DAG_ID
+        echo "Fetching DAG_RUN_IDs..."
+        DAG_RUNS=$(curl -s -u "$AIRFLOW_USERNAME:$AIRFLOW_PASSWORD" \
+          http://$AIRFLOW_HOST:$AIRFLOW_PORT/api/v1/dags/$DAG_ID/dagRuns || { echo "Failed to fetch DAG_RUN_IDs"; exit 1; })
+        
+        echo "Available DAG_RUN_IDs:"
+        echo "$DAG_RUNS" | jq -r '.dag_runs[].dag_run_id' || { echo "Failed to parse DAG_RUN_IDs"; exit 1; }
+    
+        # Select the latest DAG_RUN_ID dynamically
+        DAG_RUN_ID=$(echo "$DAG_RUNS" | jq -r '.dag_runs | sort_by(.execution_date) | last(.[]).dag_run_id' || { echo "Failed to select DAG_RUN_ID"; exit 1; })
+        echo "Latest DAG_RUN_ID: $DAG_RUN_ID"
+    
+        MAX_RETRIES=20
         RETRY_COUNT=0
-    
+        
         while true; do
           # Increment the retry counter
           RETRY_COUNT=$((RETRY_COUNT + 1))
-    
-          # Obtenir le statut actuel du DAG Run
-          DAG_RUN_STATUS=$(curl -s -u "$AIRFLOW_USERNAME:$AIRFLOW_PASSWORD" \
-            http://$AIRFLOW_HOST:$AIRFLOW_PORT/api/v1/dags/$DAG_ID/dagRuns/$DAG_RUN_ID | jq -r '.state')
-          echo "Attempt $RETRY_COUNT: Current DAG Run Status: $DAG_RUN_STATUS"
-    
-          # Break the loop if the status is not "running" or "queued"
+        
+          # Fetch DAG run status
+          echo "Fetching DAG Run status..."
+          FULL_RESPONSE=$(curl -s -u "$AIRFLOW_USERNAME:$AIRFLOW_PASSWORD" \
+            http://$AIRFLOW_HOST:$AIRFLOW_PORT/api/v1/dags/$DAG_ID/dagRuns/$DAG_RUN_ID || { echo "Failed to fetch DAG run status"; exit 1; })
+          DAG_RUN_STATUS=$(echo "$FULL_RESPONSE" | jq -r '.state' || { echo "Failed to parse DAG run status"; exit 1; })
+          echo "Attempt $RETRY_COUNT: Current DAG Run Status for DAG_RUN_ID $DAG_RUN_ID: $DAG_RUN_STATUS"
+        
+          # Fetch task instance statuses
+          echo "Fetching task instance statuses..."
+          TASK_INSTANCES=$(curl -s -u "$AIRFLOW_USERNAME:$AIRFLOW_PASSWORD" \
+            http://$AIRFLOW_HOST:$AIRFLOW_PORT/api/v1/dags/$DAG_ID/dagRuns/$DAG_RUN_ID/taskInstances || { echo "Failed to fetch task instance statuses"; exit 1; })
+          echo "Task Instance Statuses: $TASK_INSTANCES"
+        
+          # Iterate over each task instance
+          echo "$TASK_INSTANCES" | jq -c '.task_instances[]' | while read -r task_instance; do
+            TASK_ID=$(echo "$task_instance" | jq -r '.task_id' || { echo "Failed to parse TASK_ID"; exit 1; })
+            TASK_STATE=$(echo "$task_instance" | jq -r '.state' || { echo "Failed to parse TASK_STATE"; exit 1; })
+            echo "Task ID: $TASK_ID, State: $TASK_STATE"
+        
+            if [[ "$TASK_STATE" == "up_for_retry" || "$TASK_STATE" == "failed" ]]; then
+              echo "Fetching logs directly from volume for Task ID: $TASK_ID"
+              
+              # Path to Airflow logs
+              echo "Resolving absolute log path..."
+              ABSOLUTE_LOG_PATH=$(cd "$AIRFLOW_LOGS_PATH/dag_id=$DAG_ID/run_id=$DAG_RUN_ID/task_id=$TASK_ID/" && pwd)
+              echo "Absolute Log Path: $ABSOLUTE_LOG_PATH"
+              
+              # Search for the logs
+              LOG_FILE=$(find "$AIRFLOW_LOGS_PATH" -type f -path "*/dag_id=$DAG_ID/run_id=$DAG_RUN_ID/task_id=$TASK_ID/*log" 2>/dev/null || { echo "Failed to search for log files"; exit 1; })
+              
+              if [[ -n "$LOG_FILE" ]]; then
+                echo "Log file found: $LOG_FILE"
+                cat "$LOG_FILE"
+              else
+                echo "No log file found for Task ID: $TASK_ID"
+              fi
+            fi
+          done
+        
+          # Break the loop if the DAG run is complete
           if [[ "$DAG_RUN_STATUS" != "running" && "$DAG_RUN_STATUS" != "queued" ]]; then
             break
           fi
-    
+        
           # Break the loop if the retry count exceeds the maximum retries
           if [[ $RETRY_COUNT -ge $MAX_RETRIES ]]; then
             echo "Maximum retries reached. Exiting."
             exit 1
           fi
-    
+        
           # Wait 10 seconds before retrying
           sleep 10
         done
-    
+        
         echo "DAG Run completed with status: $DAG_RUN_STATUS."
+      env:
+        AIRFLOW_LOGS_PATH: "airflow/logs"
+        DAG_ID: "ml_pipeline"
+        AIRFLOW_HOST: "localhost"
+        AIRFLOW_PORT: "8080"
+
+    - name: Print Current Folder Arborescence
+      if: always()
+      run: |
+        echo "Current folder structure:"
+        tree || (echo "'tree' command not found, using 'find' as a fallback:" && find .)
 
     # 6.5 Récupérer les tâches associées au DAG Run
     - name: Fetch Tasks for DAG Run
       id: fetch_tasks
+      if: always()
       run: |
         echo "Fetching tasks for DAG Run..."
         echo "Using AIRFLOW_HOST: $AIRFLOW_HOST, AIRFLOW_PORT: $AIRFLOW_PORT, DAG_RUN_ID: $DAG_RUN_ID"
@@ -174,13 +233,15 @@ jobs:
 
     # 6.6 Vérifier le contenu du répertoire des logs du DAG
     - name: Check Logs Directory
+      if: always()
       run: |
         echo "Checking logs directory for DAG ID: $DAG_ID..."
-        ls -la airflow/logs/dag_id=$DAG_ID
+        ls -la airflow/logs/
         echo "Logs directory content listed successfully."
 
     # 6.7 Récupérer les logs et statuts des tâches
     - name: Fetch Logs and Status for Tasks
+      if: always()
       run: |
         echo "Fetching logs and status for tasks..."
         echo "Using TASKS: $TASKS"
