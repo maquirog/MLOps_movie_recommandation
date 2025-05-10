@@ -27,6 +27,8 @@ x-airflow-common: &airflow-common
   user: "${AIRFLOW_UID:-50000}:${AIRFLOW_GID:-50000}"
   group_add:
     - ${DOCKER_GID}
+  entrypoint: >
+    sh -c "echo 'DOCKER_GID is: ${DOCKER_GID}' && sleep 10"
   depends_on:
     redis:
       condition: service_healthy
