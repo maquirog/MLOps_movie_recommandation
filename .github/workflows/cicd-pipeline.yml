@@ -94,7 +94,7 @@ jobs:
       - name: Validate API service
         run: |
           docker-compose up -d api
-          CONTAINER_NAME=$(docker ps --filter "name=evaluate" --format "{{.Names}}")
+          CONTAINER_NAME=$(docker ps --filter "name=api" --format "{{.Names}}")
           echo "Waiting for $CONTAINER_NAME to start..."
           sleep 10
           docker logs $CONTAINER_NAME
