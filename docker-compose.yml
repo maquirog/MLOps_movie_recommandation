@@ -15,52 +15,43 @@ services:
   import_raw_data:
     <<: *common-service
     command: ["python", "src/data/import_raw_data.py"]
-    healthcheck:
-      test: ["CMD", "sh", "-c", "test -f /app/data/raw/tags.csv"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-      start_period: 5s
 
   build_features:
     <<: *common-service
-    command: ["python", "src/data/build_features.py"]
     depends_on:
       import_raw_data:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "sh", "-c", "test -f /app/data/processed/movie_matrix.csv"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-      start_period: 5s
+        condition: service_started
+    command: ["sh", "-c", "sleep 30 && python src/data/build_features.py"]
 
   train:
     <<: *common-service
-    command: ["python", "src/models/train.py"]
     depends_on:
-       build_features:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "sh", "-c", "test -f /app/models/model.pkl"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-      start_period: 5s
+      build_features:
+        condition: service_started
+    command: ["sh", "-c", "sleep 100 && python src/models/train.py"]
 
   predict:
     <<: *common-service
-    command: ["python", "src/models/predict.py"]
+    depends_on:
+      train:
+        condition: service_started
+    command: ["sh", "-c", "sleep 150 && python src/models/predict.py"]
 
   evaluate:
     <<: *common-service
-    command: ["python", "src/models/evaluate.py"]
+    depends_on:
+      predict:
+        condition: service_started
+    command: ["sh", "-c", "sleep 200 && python src/models/evaluate.py"]
     volumes:
       - ./metrics:/app/metrics
 
   api:
     <<: *common-service
+    depends_on:
+      evaluate:
+        condition: service_started
+    command: ["sh", "-c", "sleep 250 && uvicorn src.api.main:app --host 0.0.0.0 --port 8000"]
     ports:
       - "8000:8000"
-    command: ["uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
     restart: "no"
