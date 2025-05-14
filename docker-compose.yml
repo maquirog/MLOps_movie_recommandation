@@ -8,50 +8,40 @@ x-common-service: &common-service
     - ./src:/app/src
     - ./data:/app/data
     - ./models:/app/models
+    - ./metrics:/app/metrics
   working_dir: /app
   restart: "no"
 
 services:
   import_raw_data:
     <<: *common-service
+    image: maquirog/import_raw_data:latest
     command: ["python", "src/data/import_raw_data.py"]
 
   build_features:
     <<: *common-service
-    depends_on:
-      import_raw_data:
-        condition: service_started
-    command: ["sh", "-c", "sleep 30 && python src/data/build_features.py"]
+    image: maquirog/build_features:latest
+    command: ["python", "src/data/build_features.py"]
 
   train:
     <<: *common-service
-    depends_on:
-      build_features:
-        condition: service_started
-    command: ["sh", "-c", "sleep 100 && python src/models/train.py"]
+    image: maquirog/train:latest
+    command: ["python", "src/models/train.py"]
 
   predict:
     <<: *common-service
-    depends_on:
-      train:
-        condition: service_started
-    command: ["sh", "-c", "sleep 150 && python src/models/predict.py"]
+    image: maquirog/predict:latest
+    command: ["python", "src/models/predict.py"]
 
   evaluate:
     <<: *common-service
-    depends_on:
-      predict:
-        condition: service_started
-    command: ["sh", "-c", "sleep 200 && python src/models/evaluate.py"]
-    volumes:
-      - ./metrics:/app/metrics
+    image: maquirog/evaluate:latest
+    command: ["python", "src/models/evaluate.py"]
 
   api:
     <<: *common-service
-    depends_on:
-      evaluate:
-        condition: service_started
-    command: ["sh", "-c", "sleep 250 && uvicorn src.api.main:app --host 0.0.0.0 --port 8000"]
+    image: maquirog/api:latest
     ports:
       - "8000:8000"
+    command: ["uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
     restart: "no"
