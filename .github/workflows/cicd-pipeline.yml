@@ -49,9 +49,10 @@ jobs:
       - name: Validate import_raw_data service
         run: |
           docker-compose up -d import_raw_data
-          echo "Waiting for import_raw_data to complete..."
-          docker wait import_raw_data
-          docker logs import_raw_data
+          CONTAINER_NAME=$(docker ps --filter "name=import_raw_data" --format "{{.Names}}")
+          echo "Waiting for $CONTAINER_NAME to complete..."
+          docker wait $CONTAINER_NAME
+          docker logs $CONTAINER_NAME
 
       # Run and validate build_features service
       - name: Validate build_features service
