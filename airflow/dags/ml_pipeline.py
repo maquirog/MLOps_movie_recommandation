@@ -47,7 +47,7 @@ with DAG(
 
     build_features = create_docker_task(
         task_id='build_features',
-        image='mlops_movie_recommandation_build-features:latest',
+        image='mlops_movie_recommandation_build_features:latest',
         command='python src/data/build_features.py',
     )
 
