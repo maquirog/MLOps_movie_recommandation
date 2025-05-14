@@ -58,33 +58,37 @@ jobs:
       - name: Validate build_features service
         run: |
           docker-compose up -d build_features
-          echo "Waiting for build_features to complete..."
-          docker wait build_features
-          docker logs build_features
+          CONTAINER_NAME=$(docker ps --filter "name=build_features" --format "{{.Names}}")
+          echo "Waiting for $CONTAINER_NAME to complete..."
+          docker wait $CONTAINER_NAME
+          docker logs $CONTAINER_NAME
 
       # Run and validate train service
       - name: Validate train service
         run: |
           docker-compose up -d train
-          echo "Waiting for train to complete..."
-          docker wait train
-          docker logs train
+          CONTAINER_NAME=$(docker ps --filter "name=train" --format "{{.Names}}")
+          echo "Waiting for $CONTAINER_NAME to complete..."
+          docker wait $CONTAINER_NAME
+          docker logs $CONTAINER_NAME
 
       # Run and validate predict service
       - name: Validate predict service
         run: |
           docker-compose up -d predict
-          echo "Waiting for predict to complete..."
-          docker wait predict
-          docker logs predict
+          CONTAINER_NAME=$(docker ps --filter "name=predict" --format "{{.Names}}")
+          echo "Waiting for $CONTAINER_NAME to complete..."
+          docker wait $CONTAINER_NAME
+          docker logs $CONTAINER_NAME
 
       # Run and validate evaluate service
       - name: Validate evaluate service
         run: |
           docker-compose up -d evaluate
-          echo "Waiting for evaluate to complete..."
-          docker wait evaluate
-          docker logs evaluate
+          CONTAINER_NAME=$(docker ps --filter "name=evaluate" --format "{{.Names}}")
+          echo "Waiting for $CONTAINER_NAME to complete..."
+          docker wait $CONTAINER_NAME
+          docker logs $CONTAINER_NAME
 
       # Run and validate API service
       - name: Validate API service
