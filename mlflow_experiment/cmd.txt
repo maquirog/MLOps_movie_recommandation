@@ -1,1 +1,6 @@
-mlflow run mlflow_experiment/ --env-manager=local --experiment-name Movie_Recommandation_Model --run_name "first_run"
+docker build -t mlflow_experiment_image -f mlflow_experiment/Dockerfile .
+
+docker run -p 8080:8080 -v $(pwd)/mlruns:/app/mlruns mlflow_experiment_image
+
+# une fois le container stoppé et supprimé, on peut accéder de nouveau aux expériences en lançant le serveur de tracking MLflow en local
+mlflow server --host 0.0.0.0 --port 8080

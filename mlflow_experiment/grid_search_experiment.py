@@ -19,7 +19,8 @@ def main():
     args = parser.parse_args()
 
     # Define tracking_uri
-    client = MlflowClient(tracking_uri="http://127.0.0.1:8080")
+    mlflow.set_tracking_uri("http://127.0.0.1:8080")
+    client = MlflowClient()
 
     # Set experiment
     artifact_path = "movie_reco"
@@ -75,7 +76,7 @@ def main():
             mlflow.log_params(params)
             mlflow.log_metrics(metrics)
             mlflow.sklearn.log_model(
-                sk_model=model, input_example=filtered_users, artifact_path=artifact_path
+                sk_model=model, artifact_path=artifact_path
             )
             run_id = run.info.run_id
             print(f"Logged run_id: {run_id} with metrics: {metrics}")
