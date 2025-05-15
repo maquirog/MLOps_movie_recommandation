@@ -1,5 +1,7 @@
 import os
+import json  # For formatting JSON responses
 from fastapi import FastAPI, APIRouter, HTTPException
+from fastapi.responses import JSONResponse  # For custom JSON responses
 from src.api.models import PredictionRequest
 from typing import Dict
 import docker
@@ -38,8 +40,13 @@ def trigger_microservice(service_name: str, command: str = None):
         decoded_logs = logs.decode("utf-8")
         print(f"🚀 Logs for {service_name} microservice:\n{decoded_logs}")
 
-        # Return logs as part of the response
-        return {"status": "success", "message": f"{service_name} microservice completed successfully", "logs": decoded_logs}
+        # Beautify the response JSON
+        response = {
+            "status": "success",
+            "message": f"{service_name} microservice completed successfully",
+            "logs": decoded_logs
+        }
+        return JSONResponse(content=json.loads(json.dumps(response, indent=4)))  # Beautify JSON output
     except docker.errors.DockerException as e:
         print(f"Error while running container: {str(e)}")  # Print error for debugging
         raise HTTPException(status_code=500, detail=f"Failed to trigger {service_name}: {str(e)}")
@@ -88,11 +95,12 @@ def health_check():
     Check the API health.
     """
     try:
-        return {
+        response = {
             "status": "ok",
             "model_loaded": True,  # Replace with actual model loading check if necessary
             "user_matrix_available": True  # Replace with actual check for user matrix
         }
+        return JSONResponse(content=json.loads(json.dumps(response, indent=4)))  # Beautify JSON output
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Health check error: {str(e)}")
 
