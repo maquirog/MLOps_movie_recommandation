@@ -3,33 +3,35 @@ import pickle
 import numpy as np
 import json
 import os
+import argparse
 from typing import List, Dict, Union
 
-def load_user_data(user_matrix: Union[str, pd.DataFrame], users_id: List[int]) -> pd.DataFrame:
+def load_user_data(user_matrix: Union[str, pd.DataFrame], users_id: List[int] = None) -> pd.DataFrame:
     """
-    Charge et filtre les données utilisateur depuis un fichier ou un DataFrame.
+    Loads and filters user data from a file or DataFrame.
 
     Args:
-        user_matrix: Chemin vers un fichier CSV ou DataFrame contenant les données utilisateur.
-        users_id: Liste des IDs utilisateurs à filtrer.
+        user_matrix: Path to a CSV file or a DataFrame containing user data.
+        users_id: List of user IDs to filter. If None, returns all users.
 
     Returns:
-        DataFrame filtré contenant uniquement les utilisateurs spécifiés.
+        Filtered DataFrame containing only the specified users (or all users if users_id is None).
     """
     if isinstance(user_matrix, str):
         user_matrix = pd.read_csv(user_matrix)
-    filtered_users = user_matrix[user_matrix["userId"].isin(users_id)]
-    return filtered_users
+    if users_id is not None:
+        user_matrix = user_matrix[user_matrix["userId"].isin(users_id)]
+    return user_matrix
 
 def load_model(model_filename: str):
     """
-    Charge un modèle depuis un fichier pickle.
+    Loads a model from a pickle file.
 
     Args:
-        model_filename: Chemin vers le fichier pickle contenant le modèle.
+        model_filename: Path to the pickle file containing the model.
 
     Returns:
-        Modèle chargé.
+        Loaded model.
     """
     with open(model_filename, "rb") as filehandler:
         model = pickle.load(filehandler)
@@ -37,15 +39,15 @@ def load_model(model_filename: str):
 
 def make_predictions(model, user_data: pd.DataFrame, n_recos: int = 10) -> Dict[int, List[int]]:
     """
-    Effectue des recommandations pour les utilisateurs.
+    Generates recommendations for users.
 
     Args:
-        model: Modèle entraîné pour générer les recommandations.
-        user_data: DataFrame contenant les données des utilisateurs (sans la colonne userId).
-        n_recos: Nombre de recommandations à générer par utilisateur.
+        model: Trained model for generating recommendations.
+        user_data: DataFrame containing user data (excluding the userId column).
+        n_recos: Number of recommendations to generate per user.
 
     Returns:
-        Dictionnaire des recommandations {user_id: [movie_index1, movie_index2, ...]}.
+        Dictionary of recommendations {user_id: [movie_index1, movie_index2, ...]}.
     """
     original_ids = user_data["userId"].values
     features = user_data.drop("userId", axis=1)
@@ -59,31 +61,45 @@ def make_predictions(model, user_data: pd.DataFrame, n_recos: int = 10) -> Dict[
 
 def save_predictions_to_file(predictions: Dict[int, List[int]], output_path: str):
     """
-    Sauvegarde les prédictions dans un fichier JSON.
+    Saves predictions to a JSON file.
 
     Args:
-        predictions: Dictionnaire des recommandations {user_id: [movie_index1, movie_index2, ...]}.
-        output_path: Chemin du fichier de sortie pour sauvegarder les prédictions.
+        predictions: Dictionary of recommendations {user_id: [movie_index1, movie_index2, ...]}.
+        output_path: Path to the output file where predictions will be saved.
     """
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     with open(output_path, "w") as f:
         json.dump(predictions, f, indent=4)
-    print(f"✅ Prédictions sauvegardées dans {output_path}")
+    print(f"✅ Predictions saved to {output_path}")
 
 if __name__ == "__main__":
-    # Exemple d'utilisation
-    users_id = [1, 2, 3]
+    # Parse command-line arguments
+    parser = argparse.ArgumentParser(description="Predict movies for users.")
+    parser.add_argument("--user_ids", type=str, help="Comma-separated list of user IDs (e.g., '1,2,3').")
+    parser.add_argument("--n_recommendations", type=int, default=10, help="Number of recommendations to generate per user.")
+    parser.add_argument("--save_to_file", action="store_true", help="Whether to save predictions to a file.")
+    args = parser.parse_args()
 
-    # Charger les données utilisateur et le modèle
+    # Load user data
+    if args.user_ids:
+        users_id = list(map(int, args.user_ids.split(",")))
+    else:
+        # Default behavior: load all users
+        user_matrix_path = "data/processed/user_matrix.csv"
+        print(f"⚙️ Loading all user IDs from {user_matrix_path}...")
+        all_users = pd.read_csv(user_matrix_path)
+        users_id = all_users["userId"].tolist()
+
+    # Load user data and model
     user_data = load_user_data("data/processed/user_matrix.csv", users_id)
     model = load_model("models/model.pkl")
 
-    # Générer les prédictions
-    predictions = make_predictions(model, user_data, n_recos=10)
+    # Generate predictions
+    predictions = make_predictions(model, user_data, n_recos=args.n_recommendations)
 
-    # Sauvegarder les prédictions si nécessaire
-    save_to_file = True
-    if save_to_file:
+    # Save predictions to file if requested
+    if args.save_to_file:
         save_predictions_to_file(predictions, "data/prediction/predictions.json")
 
+    # Print predictions
     print(predictions)
