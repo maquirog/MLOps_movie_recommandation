@@ -9,10 +9,6 @@ import requests
 app = FastAPI()
 router = APIRouter()
 
-# Configuration parameters
-MODEL_PATH = "models/model.pkl"
-USER_MATRIX_PATH = "data/processed/user_matrix.csv"
-
 # Initialize Docker client
 docker_client = docker.from_env()
 
@@ -27,15 +23,23 @@ def trigger_microservice(service_name: str, command: str = None):
             "shared_metrics": {"bind": "/app/metrics", "mode": "rw"},
         }
 
-        # Run the container for the microservice
-        container_logs = docker_client.containers.run(
+        # Run the container with detach set to False to capture logs
+        logs = docker_client.containers.run(
             image=f"maquirog/{service_name}:latest",
             command=command,  # Override CMD with the provided command
-            detach=False,  # Run in the foreground for debugging
+            detach=False,  # Run in the foreground to capture logs
             volumes=shared_volumes,  # Dynamically overwrite volumes
             working_dir="/app",
+            stdout=True,
+            stderr=True,
         )
-        return {"status": "success", "message": f"{service_name} microservice triggered successfully", "logs": container_logs.decode('utf-8')}
+
+        # Logs are returned directly as a bytes object when detach=False
+        decoded_logs = logs.decode("utf-8")
+        print(f"🚀 Logs for {service_name} microservice:\n{decoded_logs}")
+
+        # Return logs as part of the response
+        return {"status": "success", "message": f"{service_name} microservice completed successfully", "logs": decoded_logs}
     except docker.errors.DockerException as e:
         print(f"Error while running container: {str(e)}")  # Print error for debugging
         raise HTTPException(status_code=500, detail=f"Failed to trigger {service_name}: {str(e)}")
@@ -60,7 +64,6 @@ def train_model():
 def evaluate():
     # Override the CMD for the evaluate service
     return trigger_microservice("evaluate", command="python src/models/evaluate.py")
-
 
 # Prediction endpoint
 @router.post("/predict")
