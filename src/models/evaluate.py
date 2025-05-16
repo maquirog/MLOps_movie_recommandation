@@ -24,7 +24,7 @@ def load_total_movie_count(movies_csv="data/processed/movie_matrix.csv"):
     df = pd.read_csv(movies_csv)
     return len(df)
 
-def compute_precision_recall_at_k(favorites, recommendations, k=10):
+def compute_precision_recall_at_k(favorites, recommended_movies, k=10):
     """
     Évalue les recommandations en calculant Precision@k et Recall@k.
     """
@@ -91,19 +91,19 @@ def compute_ndcg_at_k(favorites, recommendations, k=10):
 
     return np.mean(scores)
 
-def evaluate_and_save_metrics(favorites,recommendations, k=10, output_path="metrics/scores.json"):
-    total_movies = load_total_movie_count()
+def evaluate_and_save_metrics(favorites,recommendations, movies_csv="data/processed/movie_matrix.csv", k=10, output_path="metrics/scores.json"):
+    total_movies = load_total_movie_count(movies_csv)
     precision, recall = compute_precision_recall_at_k(favorites, recommendations, k)
     hr = compute_hit_rate_at_k(favorites, recommendations, k)
     cov = compute_coverage_at_k(recommendations, total_movies, k)
     ndcg = compute_ndcg_at_k(favorites, recommendations, k)
     
     metrics = {
-        f"precision@{k}": round(precision, 4),
-        f"recall@{k}": round(recall, 4),
-        f"hit_rate@{k}": round(hr, 4),
-        f"coverage@{k}": round(cov, 4),
-        f"ndcg@{k}": round(ndcg, 4)
+        f"precision_{str(k)}": round(precision, 4),
+        f"recall_{str(k)}": round(recall, 4),
+        f"hit_rate_{str(k)}": round(hr, 4),
+        f"coverage_{str(k)}": round(cov, 4),
+        f"ndcg_{str(k)}": round(ndcg, 4)
     }
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     with open(output_path, "w") as f:
