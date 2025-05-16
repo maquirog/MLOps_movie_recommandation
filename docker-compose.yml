@@ -40,6 +40,14 @@ services:
     image: maquirog/evaluate:latest
     command: ["python", "src/models/evaluate.py"]
 
+  experiment:
+    <<: *common-service
+    ports:
+      - "8080:8080"
+    command: ["bash", "src/experiment/entrypoint.sh"]
+    volumes:
+      - ./mlruns:/app/mlruns
+
   api:
     <<: *common-service
     image: maquirog/api:latest
