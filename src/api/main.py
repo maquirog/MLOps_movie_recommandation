@@ -51,6 +51,14 @@ def trigger_microservice(service_name: str, command: str = None):
         print(f"Error while running container: {str(e)}")  # Print error for debugging
         raise HTTPException(status_code=500, detail=f"Failed to trigger {service_name}: {str(e)}")
 
+# Health check endpoint
+@app.get("/health")
+def health_check():
+    """
+    Minimal API health check.
+    """
+    return {"status": "ok"}
+
 # Microservice endpoints
 @router.post("/import_raw_data")
 def import_raw_data():
@@ -66,11 +74,6 @@ def build_features():
 def train_model():
     # Override the CMD for the train service
     return trigger_microservice("train", command="python src/models/train.py")
-
-@router.post("/evaluate")
-def evaluate():
-    # Override the CMD for the evaluate service
-    return trigger_microservice("evaluate", command="python src/models/evaluate.py")
 
 # Prediction endpoint
 @router.post("/predict")
@@ -88,21 +91,11 @@ def predict(request: PredictionRequest):
         command=f"python src/models/predict.py {user_ids_arg} --n_recommendations {request.n_recommendations} --save_to_file"
     )
 
-# Health check endpoint
-@router.get("/health")
-def health_check():
-    """
-    Check the API health.
-    """
-    try:
-        response = {
-            "status": "ok",
-            "model_loaded": True,  # Replace with actual model loading check if necessary
-            "user_matrix_available": True  # Replace with actual check for user matrix
-        }
-        return JSONResponse(content=json.loads(json.dumps(response, indent=4)))  # Beautify JSON output
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Health check error: {str(e)}")
+@router.post("/evaluate")
+def evaluate():
+    # Override the CMD for the evaluate service
+    return trigger_microservice("evaluate", command="python src/models/evaluate.py")
+
 
 # Include router in FastAPI app
 app.include_router(router)

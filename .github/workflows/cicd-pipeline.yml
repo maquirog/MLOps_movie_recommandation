@@ -99,6 +99,16 @@ jobs:
           sleep 10
           docker logs $CONTAINER_NAME
 
+      # Install dependencies for API testing
+      - name: Install testing dependencies
+        run: |
+          pip install pytest requests
+
+      # Run API tests
+      - name: Run API tests with pytest
+        run: |
+          pytest tests/api_tests.py
+
       # Push Docker images to the registry
       - name: Push service images
         run: |
