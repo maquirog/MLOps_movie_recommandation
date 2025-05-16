@@ -3,7 +3,7 @@ import mlflow
 import pandas as pd
 import numpy as np
 from sklearn.neighbors import NearestNeighbors
-from src.models.evaluate_model import load_user_favorites, evaluate_and_save_metrics
+from src.models.evaluate import load_user_favorites, evaluate_and_save_metrics
 import os
 from itertools import product
 import argparse
@@ -19,7 +19,7 @@ def main():
     args = parser.parse_args()
 
     # Define tracking_uri
-    mlflow.set_tracking_uri("http://127.0.0.1:8080")
+    mlflow.set_tracking_uri("http://127.0.0.1:5000")
     client = MlflowClient()
 
     # Set experiment

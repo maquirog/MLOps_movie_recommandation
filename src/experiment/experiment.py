@@ -59,6 +59,7 @@ def main():
     metrics = evaluate_and_save_metrics(
             favorites=favorite_movies,
             recommendations=recommended_movies,
+            movies_csv=os.path.join(BASE_DIR, 'data', 'processed', 'movie_matrix.csv'),
             k=args.n_movies_metrics)
 
     # Store information in tracking server

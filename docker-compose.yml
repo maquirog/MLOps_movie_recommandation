@@ -43,7 +43,9 @@ services:
   experiment:
     <<: *common-service
     ports:
-      - "8080:8080"
+      - "5000:5000"
+    environment:
+      - PYTHONPATH=/app
     command: ["bash", "src/experiment/entrypoint.sh"]
     volumes:
       - ./mlruns:/app/mlruns
