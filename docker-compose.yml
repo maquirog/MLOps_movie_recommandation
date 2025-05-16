@@ -9,6 +9,7 @@ x-common-service: &common-service
     - ./data:/app/data
     - ./models:/app/models
     - ./metrics:/app/metrics
+    - "/var/run/docker.sock:/var/run/docker.sock"
   working_dir: /app
   restart: "no"
 
