@@ -18,6 +18,7 @@ x-airflow-common: &airflow-common
     AIRFLOW__SMTP__SMTP_PASSWORD: "cfsrvkongsobheta"
     AIRFLOW__SMTP__SMTP_MAIL_FROM: "de.airflow@gmail.com"
     DOCKER_GID: "${DOCKER_GID}"
+    HOST_PATH: "${HOST_PATH}"
     _PIP_ADDITIONAL_REQUIREMENTS: ${_PIP_ADDITIONAL_REQUIREMENTS:- pymongo}
   volumes:
     - ./airflow/dags:/opt/airflow/dags

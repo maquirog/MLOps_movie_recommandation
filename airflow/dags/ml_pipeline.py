@@ -2,11 +2,21 @@ from airflow import DAG
 from airflow.providers.docker.operators.docker import DockerOperator
 from docker.types import Mount
 from datetime import datetime
+import os
 
 default_args = {
     'owner': 'airflow',
     'retries': 1,
 }
+
+HOST_PATH = os.getenv("HOST_PATH")
+
+vol1 = os.path.join(HOST_PATH, 'data')
+vol2 = os.path.join(HOST_PATH, 'models')
+vol3 = os.path.join(HOST_PATH, 'metrics')
+vol4 = os.path.join(HOST_PATH, 'airflow/dags')
+vol5 = os.path.join(HOST_PATH, 'airflow/logs')
+vol6 = os.path.join(HOST_PATH, 'airflow/plugins')
 
 # Fonction pour créer un DockerOperator
 def create_docker_task(task_id, image, command):
@@ -18,12 +28,12 @@ def create_docker_task(task_id, image, command):
         docker_url='unix://var/run/docker.sock',
         network_mode='bridge',
         mounts=[
-            Mount(source='/home/ubuntu/MLOps_movie_recommandation/data', target='/app/data', type='bind'),
-            Mount(source='/home/ubuntu/MLOps_movie_recommandation/models', target='/app/models', type='bind'),
-            Mount(source='/home/ubuntu/MLOps_movie_recommandation/metrics', target='/app/metrics', type='bind'),
-            Mount(source='/home/ubuntu/MLOps_movie_recommandation/airflow/dags', target='/opt/airflow/dags', type='bind'),
-            Mount(source='/home/ubuntu/MLOps_movie_recommandation/airflow/logs', target='/opt/airflow/logs', type='bind'),
-            Mount(source='/home/ubuntu/MLOps_movie_recommandation/airflow/plugins', target='/opt/airflow/plugins', type='bind'),
+            Mount(source=vol1, target='/app/data', type='bind'),
+            Mount(source=vol2, target='/app/models', type='bind'),
+            Mount(source=vol3, target='/app/metrics', type='bind'),
+            Mount(source=vol4, target='/opt/airflow/dags', type='bind'),
+            Mount(source=vol5, target='/opt/airflow/logs', type='bind'),
+            Mount(source=vol6, target='/opt/airflow/plugins', type='bind'),
             Mount(source='/var/run/docker.sock', target='/var/run/docker.sock', type='bind'),
         ],
         force_pull=False,
@@ -41,31 +51,31 @@ with DAG(
     # Création des tâches
     import_data = create_docker_task(
         task_id='import_data',
-        image='mlops_movie_recommandation_import_raw_data:latest',
+        image='maquirog/import_raw_data:latest',
         command='python src/data/import_raw_data.py',
     )
 
     build_features = create_docker_task(
         task_id='build_features',
-        image='mlops_movie_recommandation_build_features:latest',
+        image='maquirog/build_features:latest',
         command='python src/data/build_features.py',
     )
 
     train_model = create_docker_task(
         task_id='train_model',
-        image='mlops_movie_recommandation_train:latest',
+        image='maquirog/train:latest',
         command='python src/models/train.py',
     )
 
     predict_model = create_docker_task(
         task_id='predict_model',
-        image='mlops_movie_recommandation_predict:latest',
+        image='maquirog/predict:latest',
         command='python src/models/predict.py',
     )
 
     evaluate_model = create_docker_task(
         task_id='evaluate_model',
-        image='mlops_movie_recommandation_evaluate:latest',
+        image='maquirog/evaluate:latest',
         command='python src/models/evaluate.py',
     )
 
