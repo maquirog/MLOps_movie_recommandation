@@ -24,7 +24,7 @@ def main():
 
     # Define experiment name, run name and artifact_path name
     movie_experiment = mlflow.set_experiment("Movie_Recommandation_model_Test")
-    run_name = "sixth_run"
+    run_name = "first_run"
     artifact_path = "movie_reco"
 
     # Import Database
@@ -59,7 +59,7 @@ def main():
         mlflow.log_params(params)
         mlflow.log_metrics(metrics)
         mlflow.sklearn.log_model(
-            sk_model=model, input_example=filtered_users, artifact_path=artifact_path
+            sk_model=model, artifact_path=artifact_path
         )
 
 if __name__ == "__main__":

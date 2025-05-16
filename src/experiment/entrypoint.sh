@@ -3,7 +3,7 @@
 echo "➡️  Lancement du serveur MLflow..."
 mlflow server \
   --host 0.0.0.0 \
-  --port 8080 \
+  --port 5000 \
   --backend-store-uri /app/mlruns \
   --default-artifact-root /app/mlruns &
 
@@ -13,8 +13,8 @@ sleep 5
 echo "➡️  Lancement de l'expérience MLflow..."
 mlflow run src/experiment \
   --env-manager=local \
-  --experiment-name=Movie_Recommandation_Model_Test \
-  #-P n_movies_metrics=20
+  --experiment-name=Movie_Recommandation_Model \
+  -P n_movies_metrics=20
 
-echo "✅ Expérience terminée. MLflow disponible sur http://localhost:8080"
+echo "✅ Expérience terminée. MLflow disponible sur http://localhost:5000"
 tail -f /dev/null
