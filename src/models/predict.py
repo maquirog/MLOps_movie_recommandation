@@ -77,7 +77,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Predict movies for users.")
     parser.add_argument("--user_ids", type=str, help="Comma-separated list of user IDs (e.g., '1,2,3').")
     parser.add_argument("--n_recommendations", type=int, default=10, help="Number of recommendations to generate per user.")
-    parser.add_argument("--save_to_file", action="store_true", help="Whether to save predictions to a file.")
+    parser.add_argument("--no_save_to_file", action="store_true", help="Flag to disable saving predictions to a file.")
     args = parser.parse_args()
 
     # Load user data
@@ -97,8 +97,8 @@ if __name__ == "__main__":
     # Generate predictions
     predictions = make_predictions(model, user_data, n_recos=args.n_recommendations)
 
-    # Save predictions to file if requested
-    if args.save_to_file:
+    # Save predictions to file by default unless --no_save_to_file is provided
+    if not args.no_save_to_file:
         save_predictions_to_file(predictions, "data/prediction/predictions.json")
 
     # Print predictions
