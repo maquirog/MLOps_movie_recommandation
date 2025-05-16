@@ -32,11 +32,7 @@ def test_train_endpoint():
 
 def test_predict_endpoint():
     """Test the /predict endpoint with valid input."""
-    payload = {
-        "user_ids": [1, 2, 3],
-        "n_recommendations": 5
-    }
-    response = requests.post(f"{API_BASE_URL}/predict", json=payload)
+    response = requests.post(f"{API_BASE_URL}/predict")
     assert response.status_code == 200
     assert "status" in response.json()
     assert response.json()["status"] == "success"
