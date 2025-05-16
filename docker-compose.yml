@@ -68,6 +68,14 @@ services:
     volumes:
       - ./metrics:/app/metrics
 
+  experiment:
+    <<: *common-service
+    ports:
+      - "8080:8080"
+    command: ["bash", "src/experiment/entrypoint.sh"]
+    volumes:
+      - ./mlruns:/app/mlruns
+
   api:
     <<: *common-service
     ports:
