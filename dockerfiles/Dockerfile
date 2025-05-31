@@ -7,6 +7,7 @@ WORKDIR /app
 # Copier les fichiers nécessaires pour tous les services
 COPY ./src /app/src
 COPY ./data /app/data
+COPY ./evidently /app/evidently
 
 COPY ./requirements/requirements.txt /app/requirements.txt
 

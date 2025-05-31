@@ -9,6 +9,7 @@ x-common-service: &common-service
     - ./data:/app/data
     - ./models:/app/models
     - ./metrics:/app/metrics
+    - ./reports:/app/reports
     - "/var/run/docker.sock:/var/run/docker.sock"
   working_dir: /app
   restart: "no"
@@ -46,3 +47,8 @@ services:
       - "8000:8000"
     command: ["uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
     restart: "no"
+
+  evidently:
+    <<: *common-service
+    image: maquirog/evidently:latest
+    command: ["bash", "-c", "python evidently/simulate_drift.py && python evidently/run_evidently_report.py"]
