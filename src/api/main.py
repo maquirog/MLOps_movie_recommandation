@@ -1,8 +1,9 @@
 import json  # For formatting JSON responses
-from fastapi import FastAPI, APIRouter, HTTPException
+from fastapi import FastAPI, APIRouter, HTTPException, Response
 from fastapi.responses import JSONResponse  # For custom JSON responses
 from src.api.models import PredictionRequest
 import docker
+import os
 from fastapi import Body
 
 
@@ -105,6 +106,20 @@ def evaluate():
     # Override the CMD for the evaluate service
     return trigger_microservice("evaluate", command="python src/models/evaluate.py")
 
+@app.get("/prometheus_metrics", response_class=Response)
+def get_prometheus_metrics():
+    metrics_path = "metrics/scores.json"
+    if not os.path.isfile(metrics_path):
+        return Response(content="# Metrics file not found\n", media_type="text/plain", status_code=404)
+    with open(metrics_path, "r") as f:
+        metrics = json.load(f)
+    # Convert metrics dict to Prometheus format
+    prom_lines = []
+    for key, value in metrics.items():
+        metric_name = key.lower().replace("@", "_at_").replace(".", "_").replace("-", "_")
+        prom_lines.append(f'{metric_name} {value}')
+    prom_str = "\n".join(prom_lines) + "\n"
+    return Response(content=prom_str, media_type="text/plain")
 
 # Include router in FastAPI app
 app.include_router(router)
