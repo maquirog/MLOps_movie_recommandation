@@ -10,6 +10,7 @@ x-common-service: &common-service
     - ./models:/app/models
     - ./metrics:/app/metrics
     - ./reports:/app/reports
+    - ./evidently/workspace:/app/evidently/workspace
     - "/var/run/docker.sock:/var/run/docker.sock"
   working_dir: /app
   restart: "no"
@@ -52,3 +53,12 @@ services:
     <<: *common-service
     image: maquirog/evidently:latest
     command: ["bash", "-c", "python evidently/simulate_drift.py && python evidently/run_evidently_report.py"]
+
+  #evidently_ui:
+  #  image: maquirog/evidently:latest
+  #  command: ["evidently", "ui", "--workspace", "/app/evidently/workspace", "--port", "8501"]
+  #  ports:
+  #    - "8501:8501"
+  #  volumes:
+  #    - ./evidently/workspace:/app/evidently/workspace
+  #  restart: "unless-stopped"
