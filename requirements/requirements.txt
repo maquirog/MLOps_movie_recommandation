@@ -6,4 +6,4 @@ scikit-learn
 uvicorn
 requests
 docker
-evidently==0.6.7
+evidently==0.5.0
