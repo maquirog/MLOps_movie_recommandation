@@ -6,7 +6,6 @@ import docker
 import os
 from fastapi import Body
 
-
 # Initialize FastAPI app
 app = FastAPI()
 router = APIRouter()
@@ -14,23 +13,42 @@ router = APIRouter()
 # Initialize Docker client
 docker_client = docker.from_env(timeout=300)
 
-# Utility function to trigger a microservice using Docker REST API
 def trigger_microservice(service_name: str, command: str = None):
     try:
-        # Define shared named volumes for production or container-to-container communication
-        shared_volumes = {
-            "shared_src": {"bind": "/app/src", "mode": "rw"},
-            "shared_data": {"bind": "/app/data", "mode": "rw"},
-            "shared_models": {"bind": "/app/models", "mode": "rw"},
-            "shared_metrics": {"bind": "/app/metrics", "mode": "rw"},
-        }
+        host_project_path = os.environ.get("HOST_PROJECT_PATH")
+        # Decide how to mount volumes based on environment variable
+        if os.environ.get("VOLUME_MODE", "bind") == "bind":
+            # Use host paths for bind mounts
+            volumes = {
+                os.path.join(host_project_path, "src"): {"bind": "/app/src", "mode": "rw"},
+                os.path.join(host_project_path, "data"): {"bind": "/app/data", "mode": "rw"},
+                os.path.join(host_project_path, "models"): {"bind": "/app/models", "mode": "rw"},
+                os.path.join(host_project_path, "metrics"): {"bind": "/app/metrics", "mode": "rw"},
+                os.path.join(host_project_path, "reports"): {"bind": "/app/reports", "mode": "rw"},
+            }
+            # Debug printout
+            print("Using bind mounts from host for volumes:")
+            for host_path, mount_info in volumes.items():
+                print(f"  Host: {host_path} -> Container: {mount_info['bind']} (mode: {mount_info['mode']})")
+        else:
+            # Use named Docker volumes (for CI/production)
+            volumes = {
+                "shared_src": {"bind": "/app/src", "mode": "rw"},
+                "shared_data": {"bind": "/app/data", "mode": "rw"},
+                "shared_models": {"bind": "/app/models", "mode": "rw"},
+                "shared_metrics": {"bind": "/app/metrics", "mode": "rw"},
+                "shared_reports": {"bind": "/app/reports", "mode": "rw"},
+            }
+            print("Using named Docker volumes for volumes:")
+            for vol_name, mount_info in volumes.items():
+                print(f"  Volume: {vol_name} -> Container: {mount_info['bind']} (mode: {mount_info['mode']})")
 
         # Create and run the container
         container = docker_client.containers.run(
             image=f"maquirog/{service_name}:latest",
             command=command,
-            detach=True,  # Run in the background to get a container object
-            volumes=shared_volumes,
+            detach=True,
+            volumes=volumes,
             working_dir="/app",
             stdout=True,
             stderr=True,
@@ -58,36 +76,28 @@ def trigger_microservice(service_name: str, command: str = None):
 # Health check endpoint
 @app.get("/health")
 def health_check():
-    """
-    Minimal API health check.
-    """
     return {"status": "ok"}
 
 # Microservice endpoints
 @router.post("/import_raw_data")
 def import_raw_data():
-    # Override the CMD for the import_raw_data service
     return trigger_microservice("import_raw_data", command="python src/data/import_raw_data.py")
 
 @router.post("/build_features")
 def build_features():
-    # Override the CMD for the build_features service
     return trigger_microservice("build_features", command="python src/data/build_features.py")
 
 @router.post("/train")
 def train_model():
-    # Override the CMD for the train service
     return trigger_microservice("train", command="python src/models/train.py")
 
 # Prediction endpoint
 @router.post("/predict")
 def predict(request: PredictionRequest = Body(default=None)):
-    # Set default behavior if no body is provided
     if not request:
         user_ids_arg = ""  # Default behavior: process all users
         n_recommendations = 10
     else:
-        # Check if specific user IDs are provided
         if request.user_ids:
             user_ids = ",".join(map(str, request.user_ids))
             user_ids_arg = f"--user_ids {user_ids}"
@@ -95,7 +105,6 @@ def predict(request: PredictionRequest = Body(default=None)):
             user_ids_arg = ""  # Default behavior: all users
         n_recommendations = request.n_recommendations
 
-    # Use the trigger_microservice function to start the predict container
     return trigger_microservice(
         service_name="predict",
         command=f"python src/models/predict.py {user_ids_arg} --n_recommendations {n_recommendations}"
@@ -103,7 +112,6 @@ def predict(request: PredictionRequest = Body(default=None)):
 
 @router.post("/evaluate")
 def evaluate():
-    # Override the CMD for the evaluate service
     return trigger_microservice("evaluate", command="python src/models/evaluate.py")
 
 @app.get("/prometheus_metrics", response_class=Response)
@@ -113,7 +121,6 @@ def get_prometheus_metrics():
         return Response(content="# Metrics file not found\n", media_type="text/plain", status_code=404)
     with open(metrics_path, "r") as f:
         metrics = json.load(f)
-    # Convert metrics dict to Prometheus format
     prom_lines = []
     for key, value in metrics.items():
         metric_name = key.lower().replace("@", "_at_").replace(".", "_").replace("-", "_")
@@ -121,5 +128,4 @@ def get_prometheus_metrics():
     prom_str = "\n".join(prom_lines) + "\n"
     return Response(content=prom_str, media_type="text/plain")
 
-# Include router in FastAPI app
 app.include_router(router)
