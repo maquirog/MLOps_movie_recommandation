@@ -47,6 +47,8 @@ services:
     environment:
       - PYTHONPATH=/app
     command: ["bash", "src/experiment/entrypoint.sh"]
+    depends_on:
+      - api
     volumes:
       - ./mlruns:/app/mlruns
 
