@@ -46,11 +46,15 @@ services:
       - "5000:5000"
     environment:
       - PYTHONPATH=/app
+      - HOST_PROJECT_PATH=${HOST_PROJECT_PATH}
     command: ["bash", "src/experiment/entrypoint.sh"]
     depends_on:
       - api
     volumes:
-      - ./mlruns:/app/mlruns
+      - ${HOST_PROJECT_PATH}/mlruns:/app/mlruns
+      - ${HOST_PROJECT_PATH}/models:/app/models
+      - ${HOST_PROJECT_PATH}/metrics:/app/metrics
+      - ${HOST_PROJECT_PATH}/data:/app/data
 
   api:
     <<: *common-service

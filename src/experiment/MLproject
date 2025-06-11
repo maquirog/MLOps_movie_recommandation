@@ -2,9 +2,4 @@ name: movie_reco
 
 entry_points:
   main:
-    parameters:
-      #n_neighbors: {type: int, default: 30}
-      #nearest_neighbors_algorithm: {type: str, default: 'ball_tree'}
-      n_movies_metrics: {type: int, default: 10}
-    command: "python grid_search_experiment.py --n_movies_metrics {n_movies_metrics}"
-    #command: "python experiment.py --n_neighbors {n_neighbors} --nearest_neighbors_algorithm {nearest_neighbors_algorithm} --n_movies_metrics {n_movies_metrics}"
+    command: "python grid_search_experiment.py"
