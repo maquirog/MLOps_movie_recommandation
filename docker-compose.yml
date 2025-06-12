@@ -52,9 +52,7 @@ services:
       - api
     volumes:
       - ${HOST_PROJECT_PATH}/mlruns:/app/mlruns
-      - ${HOST_PROJECT_PATH}/models:/app/models
       - ${HOST_PROJECT_PATH}/metrics:/app/metrics
-      - ${HOST_PROJECT_PATH}/data:/app/data
 
   api:
     <<: *common-service
