@@ -8,6 +8,8 @@ WORKDIR /app
 COPY ./src /app/src
 COPY ./data /app/data
 COPY ./evidently /app/evidently
+COPY ./models /app/models
+COPY ./metrics /app/metrics
 
 COPY ./requirements/requirements.txt /app/requirements.txt
 
