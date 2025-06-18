@@ -41,6 +41,20 @@ services:
     image: maquirog/evaluate:latest
     command: ["python", "src/models/evaluate.py"]
 
+  experiment:
+    <<: *common-service
+    ports:
+      - "5000:5000"
+    environment:
+      - PYTHONPATH=/app
+      - HOST_PROJECT_PATH=${HOST_PROJECT_PATH}
+    command: ["bash", "src/experiment/entrypoint.sh"]
+    depends_on:
+      - api
+    volumes:
+      - ${HOST_PROJECT_PATH}/mlruns:/app/mlruns
+      - ${HOST_PROJECT_PATH}/metrics:/app/metrics
+
   api:
     <<: *common-service
     image: maquirog/api:latest

@@ -1,7 +1,7 @@
 import json  # For formatting JSON responses
 from fastapi import FastAPI, APIRouter, HTTPException, Response
 from fastapi.responses import JSONResponse  # For custom JSON responses
-from src.api.models import PredictionRequest
+from src.api.models import TrainRequest, PredictionRequest
 import docker
 import os
 from fastapi import Body
@@ -87,9 +87,26 @@ def import_raw_data():
 def build_features():
     return trigger_microservice("build_features", command="python src/data/build_features.py")
 
+#@router.post("/train")
+#def train_model():
+#    return trigger_microservice("train", command="python src/models/train.py")
+
+
+# Training endpoint
 @router.post("/train")
-def train_model():
-    return trigger_microservice("train", command="python src/models/train.py")
+def train(request: TrainRequest = Body(default=None)):
+    if not request or request.hyperparams is None:
+        hyperparams_arg = ""
+    else:
+        json_params = json.dumps(request.hyperparams)
+        hyperparams_arg = f"--hyperparams_dict '{json_params}'"
+
+    command = f"python src/models/train.py {hyperparams_arg}"
+
+    return trigger_microservice(
+        service_name="train",
+        command=command
+    )
 
 # Prediction endpoint
 @router.post("/predict")
