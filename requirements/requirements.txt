@@ -6,5 +6,5 @@ scikit-learn
 uvicorn
 requests
 docker
-evidently==0.5.0
+evidently==0.6.7
 mlflow
