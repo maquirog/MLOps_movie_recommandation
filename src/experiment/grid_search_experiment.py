@@ -59,11 +59,12 @@ def main():
         print(f"\nTraining with hyperparameters: {hyperparams}")
 
         call_train(hyperparams)
-        call_predict()
+        call_predict(user_ids=list(range(1, 1001)))
         call_evaluate()
 
         BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
         metrics_path = os.path.join(BASE_DIR, "metrics", "scores.json")
+        model_path = os.path.join(BASE_DIR, "models", "model.pkl")
         with open(metrics_path, "r") as f:
             metrics = json.load(f)
 
@@ -71,6 +72,8 @@ def main():
         with mlflow.start_run() as run:
             mlflow.log_params(hyperparams)
             mlflow.log_metrics(metrics)
+            mlflow.log_artifact(model_path, artifact_path="model")
+            mlflow.log_artifact(metrics_path, artifact_path="metrics")
             run_id = run.info.run_id
             print(f"Logged run_id: {run_id} with metrics: {metrics}")
 

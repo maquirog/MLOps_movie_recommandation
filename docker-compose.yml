@@ -43,6 +43,7 @@ services:
 
   experiment:
     <<: *common-service
+    image: experiment:latest
     ports:
       - "5000:5000"
     environment:
