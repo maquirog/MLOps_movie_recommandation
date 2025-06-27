@@ -1,7 +1,7 @@
 {
-    "precision@10": 0.0124,
-    "recall@10": 0.0027,
-    "hit_rate@10": 0.1075,
-    "coverage@10": 0.0981,
-    "ndcg@10": 0.0116
+    "precision@10": 0.0,
+    "recall@10": 0.0,
+    "hit_rate@10": 0.0,
+    "coverage@10": 0.0,
+    "ndcg@10": 0.0
 }
