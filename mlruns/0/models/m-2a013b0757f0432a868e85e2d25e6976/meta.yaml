@@ -1,0 +1,10 @@
+artifact_location: file:///Users/rubenchekroun/Code/DataScientest/Cours/MLOps/Project/MLOps_movie_recommandation/mlruns/0/models/m-2a013b0757f0432a868e85e2d25e6976/artifacts
+creation_timestamp: 1751135704326
+experiment_id: '0'
+last_updated_timestamp: 1751135705336
+model_id: m-2a013b0757f0432a868e85e2d25e6976
+model_type: null
+name: null_model
+source_run_id: d53c643269eb4d93a77a0ff8463c8c8b
+status: 2
+status_message: null
