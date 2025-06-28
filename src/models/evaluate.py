@@ -3,7 +3,7 @@ import json
 import numpy as np
 import os
 import mlflow
-import argparse
+from mlflow.tracking import MlflowClient
 
 def load_user_favorites(user_favorites_json="data/processed/user_favorites.json"):
     """
@@ -25,6 +25,14 @@ def load_total_movie_count(movies_csv="data/processed/movie_matrix.csv"):
     """
     df = pd.read_csv(movies_csv)
     return len(df)
+
+def get_run_id_from_alias(model_name: str, alias: str) -> str:
+    client = MlflowClient()
+    # Récupère la version de modèle associée à l'alias
+    alias_info = client.get_model_version_by_alias(name=model_name, alias=alias)
+    # run_id associé à cette version
+    run_id = alias_info.run_id
+    return run_id
 
 def compute_precision_recall_at_k(favorites, recommended_movies, k=10):
     """
@@ -93,7 +101,7 @@ def compute_ndcg_at_k(favorites, recommendations, k=10):
 
     return np.mean(scores)
 
-def evaluate_and_log_metrics(favorites,recommendations, movies_csv="data/processed/movie_matrix.csv", k=10, mlflow_alias=None, output_path=None):
+def evaluate_and_log_metrics(favorites,recommendations, run_id_train, movies_csv="data/processed/movie_matrix.csv", k=10, mlflow_alias=None, output_path=None):
     if not recommendations:
         metrics = {
             "precision_10": 0.0,
@@ -118,7 +126,7 @@ def evaluate_and_log_metrics(favorites,recommendations, movies_csv="data/process
         }
         
     # Log in MLflow
-    with mlflow.start_run(run_name=f"evaluation_{mlflow_alias}" if mlflow_alias else "evaluation") as run:
+    with mlflow.start_run(run_id=run_id_train):
         mlflow.log_params({"alias": mlflow_alias, "k": k})
         mlflow.log_metrics(metrics)
 
@@ -146,12 +154,28 @@ if __name__ == "__main__":
     challenger_recommendations = load_user_recommendations(path_challenger)
     champion_recommendations = load_user_recommendations(path_champion)
     
+    # Chargement des run-ids
+    challenger_run_id= get_run_id_from_alias(model_name="movie_recommender", alias="challenger")
+    champion_run_id = get_run_id_from_alias(model_name="movie_recommender", alias="champion")
+    
     # Évaluation
     print("📊 Évaluation du modèle Challenger")
-    challenger_metrics = evaluate_and_log_metrics(favorite_movies, challenger_recommendations, mlflow_alias="challenger", output_path="metrics/challenger_metrics.json")
+    challenger_metrics = evaluate_and_log_metrics(
+        favorite_movies,
+        challenger_recommendations,
+        run_id_train=challenger_run_id,
+        mlflow_alias="challenger",
+        output_path="metrics/challenger_metrics.json"
+    )
     print(json.dumps(challenger_metrics, indent=4))
     
 
     print("\n📊 Évaluation du modèle Champion")
-    champion_metrics = evaluate_and_log_metrics(favorite_movies, champion_recommendations, mlflow_alias="champion", output_path="metrics/champion_metrics.json")
+    champion_metrics = evaluate_and_log_metrics(
+        favorite_movies,
+        champion_recommendations,
+        run_id_train=champion_run_id,
+        mlflow_alias="champion",
+        output_path="metrics/champion_metrics.json"
+    )
     print(json.dumps(champion_metrics, indent=4))

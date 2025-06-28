@@ -1,8 +1,9 @@
 artifact_uri: file:///Users/rubenchekroun/Code/DataScientest/Cours/MLOps/Project/MLOps_movie_recommandation/mlruns/0/990756830c4a471a938c2004f72c7c04/artifacts
+deleted_time: 1751149753671
 end_time: 1751141909938
 entry_point_name: ''
 experiment_id: '0'
-lifecycle_stage: active
+lifecycle_stage: deleted
 run_id: 990756830c4a471a938c2004f72c7c04
 run_name: evaluation_challenger
 source_name: ''
