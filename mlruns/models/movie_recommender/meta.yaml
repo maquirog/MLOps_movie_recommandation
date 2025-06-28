@@ -1,0 +1,9 @@
+aliases:
+  Challenger: '7'
+  Champion: '3'
+creation_timestamp: 1751135705365
+deployment_job_id: null
+deployment_job_state: null
+description: null
+last_updated_timestamp: 1751137336593
+name: movie_recommender
