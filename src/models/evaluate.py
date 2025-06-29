@@ -10,7 +10,7 @@ def load_json(path):
     with open(path, "r") as f:
         return json.load(f)
 
-def load_total_movie_count(movies_csv=DEFAULT_MOVIES_CSV):
+def load_total_movie_count(movies_csv="data/processed/movie_matrix.csv"):
     """
     Charge le dataset des films et retourne le nombre total de films.
     """
