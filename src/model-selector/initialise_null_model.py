@@ -29,8 +29,7 @@ def register_null_model(model_name: str = "movie_recommender"):
         mlflow.log_metrics(null_metrics)
         
         # ▶️ 4. Ajouter un tag (optionnel mais recommandé)
-        mlflow.set_tag("model_type", "null")
-        mlflow.set_tag("stage", "initialisation")    
+        mlflow.set_tags({"model_type": 'null',"stage": "initialisation", "model_version":1})
         
         
         # Registry
