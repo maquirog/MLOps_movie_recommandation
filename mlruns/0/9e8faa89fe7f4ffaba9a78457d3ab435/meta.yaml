@@ -1,0 +1,14 @@
+artifact_uri: file:///Users/rubenchekroun/Code/DataScientest/Cours/MLOps/Project/MLOps_movie_recommandation/mlruns/0/9e8faa89fe7f4ffaba9a78457d3ab435/artifacts
+end_time: 1751200800679
+entry_point_name: ''
+experiment_id: '0'
+lifecycle_stage: active
+run_id: 9e8faa89fe7f4ffaba9a78457d3ab435
+run_name: null_model_baseline
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1751200799670
+status: 3
+tags: []
+user_id: rubenchekroun
