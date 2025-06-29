@@ -1,0 +1,7 @@
+{
+    "precision_10": 0.0,
+    "recall_10": 0.0,
+    "hit_rate_10": 0.0,
+    "coverage_10": 0.0,
+    "ndcg_10": 0.0
+}
