@@ -5,28 +5,9 @@ import os
 import mlflow
 from mlflow.tracking import MlflowClient
 
-# === Chemins adaptés pour une exécution Docker === #
-# --- Env --- #
-BASE_DIR = os.environ.get("BASE_DIR", os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
-METRICS_DIR= os.environ.get("METRICS_DIR", os.path.join(BASE_DIR, "metrics"))
-DATA_DIR= os.environ.get("DATA_DIR", os.path.join(BASE_DIR, "data"))
-MLFLOW_TRACKING_URI = os.environ.get("MLFLOW_TRACKING_URI", "http://mlflow-server:5050")
-
-# --- DEFAULT --- #
-DEFAULT_PREDICTIONS_DIR =os.path.join(DATA_DIR, "predictions")
-DEFAULT_FAVORITES_PATH = os.path.join(DATA_DIR, "processed/user_favorites.json")
-DEFAULT_MOVIES_CSV = os.path.join(DATA_DIR, "processed/movie_matrix.csv")
-
 
 def load_json(path):
     with open(path, "r") as f:
-        return json.load(f)
-
-def load_user_recommendations(user_prediction_json):
-    """
-    Charge les films recommandés par le model pour chaque utilisateur à partir du fichier JSON.
-    """
-    with open(user_prediction_json, "r") as f:
         return json.load(f)
 
 def load_total_movie_count(movies_csv=DEFAULT_MOVIES_CSV):
@@ -36,57 +17,14 @@ def load_total_movie_count(movies_csv=DEFAULT_MOVIES_CSV):
     df = pd.read_csv(movies_csv)
     return len(df)
 
-def get_run_id_from_alias(model_name: str, alias: str) -> str:
+def get_infos_from_alias(model_name: str, alias: str) -> str:
     client = MlflowClient()
-    # Récupère la version de modèle associée à l'alias
-    alias_info = client.get_model_version_by_alias(name=model_name, alias=alias)
-    # run_id associé à cette version
-    run_id = alias_info.run_id
-    return run_id
+    mv = client.get_model_version_by_alias(name=model_name, alias=alias)
+    return mv.run_id, mv.version
 
-def compute_precision_recall_at_k(favorites, recommended_movies, k=10):
-    """
-    Évalue les recommandations en calculant Precision@k et Recall@k.
-    """
-    precision, recall = [], []
 
-    for user_id, liked_movies in favorites.items():
-        recommended = recommended_movies.get(user_id, [])[:k]
-        
-        recommendations = set(recommended)
-        liked_set = set(liked_movies)
-        
-        # Precision@k = (Films recommandés pertinents) / k
-        precision_at_k = len(recommendations.intersection(liked_set)) / k
-        
-        # Recall@k = (Films aimés retrouvés parmi les recommandés) / (Total des films aimés)
-        recall_at_k = len(recommendations.intersection(liked_set)) / len(liked_set) if liked_set else 0
-        
-        precision.append(precision_at_k)
-        recall.append(recall_at_k)
-    
-    return np.mean(precision), np.mean(recall)
-
-def compute_hit_rate_at_k(favorites, recommendations, k=10):
-    """
-    Calcule le Hit Rate pour les recommandations.
-    """
-    hits = 0
-    for user_id, liked_movies in favorites.items():
-        recommended = recommendations.get(user_id, [])
-        recommended_set = set(recommended[:k])
-        liked_set = set(liked_movies)
-        
-        # Si au moins un film recommandé est dans les films aimés
-        if recommended_set.intersection(liked_set):
-            hits += 1
-    
-    return hits / len(favorites)
-
-def compute_coverage_at_k(recommendations, total_movies, k=10):
-    """
-    Calcule le Coverage des recommandations.
-    """
+def compute_metrics(favorites, recommendations, total_movies, k=10):
+    precision, recall, ndcg_scores, hits = [], [], [], 0
     recommended_set = set()
 
     for user, liked in favorites.items():
@@ -104,90 +42,143 @@ def compute_coverage_at_k(recommendations, total_movies, k=10):
         idcg = sum(1 / np.log2(i + 2) for i in range(min(k, len(liked_set))))
         ndcg_scores.append(dcg / idcg if idcg else 0)
 
-    scores = []
-    for user_id, liked in favorites.items():
-        rec = recommendations.get(user_id, [])[:k]
-        dcg_val = dcg(rec, liked)
-        idcg_val = idcg(liked)
-        scores.append(dcg_val / idcg_val if idcg_val else 0)
+    return {
+        f"precision_{k}": round(np.mean(precision), 4),
+        f"recall_{k}": round(np.mean(recall), 4),
+        f"hit_rate_{k}": round(hits / len(favorites), 4),
+        f"coverage_{k}": round(len(recommended_set) / total_movies, 4),
+        f"ndcg_{k}": round(np.mean(ndcg_scores), 4)
+    }
+    
+def evaluate_and_log(favorites, recommendations, alias, model_version, run_id=None, model_name="movie_recommender", output_path=None, k=10):
+    total_movies = load_total_movie_count()
+    metrics = compute_metrics(favorites, recommendations, total_movies, k)
 
-    return np.mean(scores)
+    if output_path:
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        with open(output_path, "w") as f:
+            json.dump(metrics, f, indent=4)
 
-def evaluate_and_log_metrics(favorites,recommendations, run_id_train, movies_csv="data/processed/movie_matrix.csv", k=10, mlflow_alias=None, output_path=None):
-    if not recommendations:
-        metrics = {
-            "precision_10": 0.0,
-            "recall_10": 0.0,
-            "hit_rate_10": 0.0,
-            "coverage_10": 0.0,
-            "ndcg_10": 0.0
-        }
+    if run_id and alias != "champion":
+        print(f"📎 Logging to existing run: {run_id}")
+        with mlflow.start_run(run_id=run_id):
+            mlflow.log_metrics(metrics)
+            mlflow.set_tags({"model_version": model_version, "alias": alias, "model_name": model_name})
     else:
-        total_movies = load_total_movie_count(movies_csv)
-        precision, recall = compute_precision_recall_at_k(favorites, recommendations, k)
-        hr = compute_hit_rate_at_k(favorites, recommendations, k)
-        cov = compute_coverage_at_k(recommendations, total_movies, k)
-        ndcg = compute_ndcg_at_k(favorites, recommendations, k)
-        
-        metrics = {
-            f"precision_{str(k)}": round(precision, 4),
-            f"recall_{str(k)}": round(recall, 4),
-            f"hit_rate_{str(k)}": round(hr, 4),
-            f"coverage_{str(k)}": round(cov, 4),
-            f"ndcg_{str(k)}": round(ndcg, 4)
-        }
-        
-    # Log in MLflow
-    with mlflow.start_run(run_id=run_id_train):
-        mlflow.log_params({"alias": mlflow_alias, "k": k})
-        mlflow.log_metrics(metrics)
+        print(f"🆕 Creating new run for {alias} v{model_version}")
+        with mlflow.start_run(run_name=f"evaluation_{alias}-{model_name}_v{model_version}"):
+            mlflow.log_metrics(metrics)
+            mlflow.set_tags({"model_version": model_version, "alias": alias, "model_name": model_name, "evaluation_type": "new_dataset"})
+            if output_path:
+                mlflow.log_artifact(output_path)
 
-        if output_path:
-            os.makedirs(os.path.dirname(output_path), exist_ok=True)
-            with open(output_path, "w") as f:
-                json.dump(metrics, f, indent=4)
-            mlflow.log_artifact(output_path)
-    
-    print(f"\n📊 Evaluation Metrics ({mlflow_alias or 'N/A'}):")
-    for key, val in metrics.items():
-        print(f"{key}: {val}")
+    print(f"\n📊 Evaluation ({alias}):")
+    for k, v in metrics.items():
+        print(f"{k}: {v}")
 
-    return metrics
-    
 if __name__ == "__main__":
-    # Chargement des films aimés par utilisateur
-    favorite_movies = load_user_favorites()
-    
-    # Chemins vers les fichiers de recommandations des deux modèles
-    path_challenger = "data/prediction/predictions_challenger.json"
-    path_champion = "data/prediction/predictions_champion.json"
-    
-    # Chargement des recommandations
-    challenger_recommendations = load_user_recommendations(path_challenger)
-    champion_recommendations = load_user_recommendations(path_champion)
-    
-    # Chargement des run-ids
-    challenger_run_id= get_run_id_from_alias(model_name="movie_recommender", alias="challenger")
-    champion_run_id = get_run_id_from_alias(model_name="movie_recommender", alias="champion")
-    
-    # Évaluation
-    print("📊 Évaluation du modèle Challenger")
-    challenger_metrics = evaluate_and_log_metrics(
-        favorite_movies,
-        challenger_recommendations,
-        run_id_train=challenger_run_id,
-        mlflow_alias="challenger",
-        output_path="metrics/challenger_metrics.json"
-    )
-    print(json.dumps(challenger_metrics, indent=4))
-    
+    while mlflow.active_run():
+        mlflow.end_run()
 
-    print("\n📊 Évaluation du modèle Champion")
-    champion_metrics = evaluate_and_log_metrics(
-        favorite_movies,
-        champion_recommendations,
-        run_id_train=champion_run_id,
-        mlflow_alias="champion",
-        output_path="metrics/champion_metrics.json"
-    )
-    print(json.dumps(champion_metrics, indent=4))
+    favs = load_json("data/processed/user_favorites.json")
+    recs_challenger = load_json("data/prediction/predictions_challenger.json")
+    recs_champion = load_json("data/prediction/predictions_champion.json")
+
+    run_id_chall, ver_chall = get_infos_from_alias("movie_recommender", "challenger")
+    run_id_champ, ver_champ = get_infos_from_alias("movie_recommender", "champion")
+
+    evaluate_and_log(favs, recs_challenger, "challenger", ver_chall, run_id=run_id_chall, output_path="metrics/challenger.json")
+    evaluate_and_log(favs, recs_champion, "champion", ver_champ, output_path="metrics/champion.json")
+    
+# def evaluate_metrics(favorites,recommendations, 
+#                      movies_csv="data/processed/movie_matrix.csv", k=10,
+#                      output_path=None):
+#     if not recommendations:
+#         metrics = {
+#             f"precision_{k}": 0.0,
+#             f"recall_{k}": 0.0,
+#             f"hit_rate_{k}": 0.0,
+#             f"coverage_{k}": 0.0,
+#             f"ndcg_{k}": 0.0
+#         }
+#     else:
+#         total_movies = load_total_movie_count(movies_csv)
+#         precision, recall = compute_precision_recall_at_k(favorites, recommendations, k)
+#         hr = compute_hit_rate_at_k(favorites, recommendations, k)
+#         cov = compute_coverage_at_k(recommendations, total_movies, k)
+#         ndcg = compute_ndcg_at_k(favorites, recommendations, k)
+        
+#         metrics = {
+#             f"precision_{str(k)}": round(precision, 4),
+#             f"recall_{str(k)}": round(recall, 4),
+#             f"hit_rate_{str(k)}": round(hr, 4),
+#             f"coverage_{str(k)}": round(cov, 4),
+#             f"ndcg_{str(k)}": round(ndcg, 4)
+#         }
+        
+#     if output_path:
+#         os.makedirs(os.path.dirname(output_path), exist_ok=True)
+#         with open(output_path, "w") as f:
+#             json.dump(metrics, f, indent=4)
+#         mlflow.log_artifact(output_path)
+    
+#     return metrics
+        
+# def log_metrics(metrics, run_id_train=None, model_version=None, 
+#                 mlflow_alias=None):
+#     # Log in MLflow
+#     if run_id_train and mlflow_alias != "champion":
+#         print(f"Logging metrics to existing run {run_id_train} for {mlflow_alias}")
+#         with mlflow.start_run(run_id=run_id_train) as run:
+#             mlflow.log_metrics(metrics)
+#             mlflow.set_tag('model_version', model_version)
+#             mlflow.set_tag("alias", mlflow_alias)
+#             mlflow.set_tag("model_name", "movie_recommender")
+#     else:
+#         print(f"Creating a new run for evaluation of {mlflow_alias} version {model_version}")
+#         with mlflow.start_run(run_name=f"evaluation_{mlflow_alias} (v{model_version})", nested=True) as run:
+#             mlflow.log_metrics(metrics)
+#             mlflow.set_tag('model_version', model_version)
+#             mlflow.set_tag("alias", mlflow_alias)
+#             mlflow.set_tag("model_name", "movie_recommender")
+            
+#     print(f"\n📊 Evaluation Metrics ({mlflow_alias}):")
+#     for key, val in metrics.items():
+#         print(f"{key}: {val}")
+    
+# if __name__ == "__main__":
+#     # 🔐 Assure-toi que TOUTE run est bien fermée
+#     while mlflow.active_run():
+#         mlflow.end_run()
+#     # Chargement des films aimés par utilisateur
+#     favorite_movies = load_user_favorites()
+    
+#     # Chemins vers les fichiers de recommandations des deux modèles
+#     path_challenger = "data/prediction/predictions_challenger.json"
+#     path_champion = "data/prediction/predictions_champion.json"
+    
+#     # Chargement des recommandations
+#     challenger_recommendations = load_user_recommendations(path_challenger)
+#     champion_recommendations = load_user_recommendations(path_champion)
+    
+#     # Chargement des run-ids
+#     challenger_run_id, challenger_model_version= get_infos_from_alias(model_name="movie_recommender", alias="challenger")
+#     champion_run_id, champion_model_version= get_infos_from_alias(model_name="movie_recommender", alias="champion")
+    
+#     # Évaluation
+#     challenger_metrics = evaluate_metrics(
+#         favorite_movies,
+#         challenger_recommendations,
+#         output_path="metrics/challenger_metrics.json"
+#     )
+
+#     champion_metrics = evaluate_metrics(
+#         favorite_movies,
+#         champion_recommendations,
+#         mlflow_alias="champion",
+#         output_path="metrics/champion_metrics.json"
+#     )
+    
+#     # log metric
+#     log_metrics(challenger_metrics, run_id_train=challenger_run_id, model_version=challenger_model_version, mlflow_alias="challenger")
+#     log_metrics(champion_metrics, run_id_train=champion_run_id, model_version=champion_model_version, mlflow_alias="champion")
