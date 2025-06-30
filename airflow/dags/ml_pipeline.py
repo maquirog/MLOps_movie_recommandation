@@ -1,5 +1,7 @@
 from airflow import DAG
 from airflow.providers.docker.operators.docker import DockerOperator
+from airflow.operators.python import PythonOperator
+from airflow.models import Variable
 from docker.types import Mount
 from datetime import datetime
 import os
@@ -18,7 +20,6 @@ vol4 = os.path.join(HOST_PATH, 'airflow/dags')
 vol5 = os.path.join(HOST_PATH, 'airflow/logs')
 vol6 = os.path.join(HOST_PATH, 'airflow/plugins')
 
-# Fonction pour créer un DockerOperator
 def create_docker_task(task_id, image, command):
     return DockerOperator(
         task_id=task_id,
@@ -39,7 +40,14 @@ def create_docker_task(task_id, image, command):
         force_pull=False,
     )
 
-# Définition du DAG
+def get_current_week():
+    # Récupère la semaine courante depuis la variable Airflow, default=0
+    return int(Variable.get("current_week", default_var=0))
+
+def increment_week():
+    week = int(Variable.get("current_week", default_var=0))
+    Variable.set("current_week", week + 1)
+
 with DAG(
     'ml_pipeline',
     default_args=default_args,
@@ -48,11 +56,18 @@ with DAG(
     start_date=datetime(2023, 1, 1),
     catchup=False,
 ) as dag:
-    # Création des tâches
+
     import_data = create_docker_task(
         task_id='import_data',
         image='maquirog/import_raw_data:latest',
         command='python src/data/import_raw_data.py',
+    )
+
+    current_week = get_current_week()
+    prepare_weekly_dataset = create_docker_task(
+        task_id='prepare_weekly_dataset',
+        image='maquirog/prepare_weekly_dataset:latest',
+        command=f'python src/data/prepare_weekly_dataset.py {current_week}',
     )
 
     build_features = create_docker_task(
@@ -79,5 +94,10 @@ with DAG(
         command='python src/models/evaluate.py',
     )
 
-    # Définition des dépendances
-    import_data >> build_features >> train_model >> predict_model >> evaluate_model
+    increment_week_task = PythonOperator(
+        task_id='increment_week',
+        python_callable=increment_week,
+    )
+
+    # Dépendances du pipeline
+    import_data >> prepare_weekly_dataset >> build_features >> train_model >> predict_model >> evaluate_model >> increment_week_task

@@ -21,6 +21,13 @@ services:
     image: maquirog/import_raw_data:latest
     command: ["python", "src/data/import_raw_data.py"]
 
+  prepare_weekly_dataset:
+    <<: *common-service
+    image: maquirog/prepare_weekly_dataset:latest
+    command: ["python", "src/data/prepare_weekly_dataset.py", "${CURRENT_WEEK}"]
+    environment:
+      - CURRENT_WEEK=${CURRENT_WEEK}
+
   build_features:
     <<: *common-service
     image: maquirog/build_features:latest
