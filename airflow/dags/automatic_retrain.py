@@ -2,7 +2,7 @@ from airflow import DAG
 from airflow.operators.python import PythonOperator
 from airflow.providers.docker.operators.docker import DockerOperator
 from docker.types import Mount
-#from src.models.check_and_update_model import check_and_update_model
+# from src.models.check_and_update_model import check_and_update_model
 from datetime import datetime
 import requests
 import json
@@ -25,9 +25,13 @@ vol4 = os.path.join(HOST_PATH, 'airflow/dags')
 vol5 = os.path.join(HOST_PATH, 'airflow/logs')
 vol6 = os.path.join(HOST_PATH, 'airflow/plugins')
 
+# Subclass DockerOperator to avoid command templating
+class NoTemplateDockerOperator(DockerOperator):
+    template_fields = tuple(f for f in DockerOperator.template_fields if f != "command")
+
 # Fonction pour créer un DockerOperator
 def create_docker_task(task_id, image, command):
-    return DockerOperator(
+    return NoTemplateDockerOperator(
         task_id=task_id,
         image=image,
         command=command,
@@ -70,7 +74,7 @@ def check_and_update_model():
                     with open(metrics_path) as mf:
                         m = json.load(mf)
                         if m.get("coverage_10", 0) > best_coverage:
-                            run_dir = Path(root).parent.parent 
+                            run_dir = Path(root).parent.parent
                             model_candidate = run_dir / "artifacts" / "model" / "model.pkl"
                             if model_candidate.exists():
                                 best_coverage = m["coverage_10"]
@@ -110,22 +114,22 @@ with DAG(
     catchup=False,
     tags=['ml', 'retrain'],
 ) as dag:
-    
+
     experiment_task = create_docker_task(
         task_id='run_grid_search_task',
         image='experiment:latest',
-        command=["bash", "src/experiment/entrypoint.sh"],
+        command="bash /app/src/experiment/entrypoint.sh",
     )
 
-    #check_update_task = PythonOperator(
-    #    task_id="run_check_update_prod_model_task",
-    #    python_callable=check_and_update_model,
-    #)
+    # check_update_task = PythonOperator(
+    #     task_id="run_check_update_prod_model_task",
+    #     python_callable=check_and_update_model,
+    # )
 
     check_update_task = create_docker_task(
         task_id='run_check_update_prod_model_task',
         image='check_update_prod_model:latest',
-        command=["python", "src/models/check_update_prod_model.py"],
+        command="python /app/src/models/check_update_prod_model.py",
     )
 
     experiment_task >> check_update_task
