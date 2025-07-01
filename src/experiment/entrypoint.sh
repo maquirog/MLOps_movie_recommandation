@@ -6,6 +6,7 @@ mlflow server \
   --port 5000 \
   --backend-store-uri /app/mlruns \
   --default-artifact-root /app/mlruns &
+MLFLOW_PID=$!  # Capture le PID du processus MLflow
 
 # Attente pour laisser le temps au serveur de démarrer
 sleep 5
@@ -17,4 +18,4 @@ mlflow run src/experiment \
   --experiment-name=Movie_Recommandation_Model
 
 echo "✅ Expérience terminée. MLflow disponible sur http://localhost:5000"
-tail -f /dev/null
+#tail -f /dev/null
