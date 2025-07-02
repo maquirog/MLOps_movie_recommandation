@@ -1,8 +1,9 @@
 artifact_uri: file:///Users/rubenchekroun/Code/DataScientest/Cours/MLOps/Project/MLOps_movie_recommandation/mlruns/0/63d4a5ba85b24b6488bd38e5f2dd1b93/artifacts
+deleted_time: 1751411451059
 end_time: 1751200853023
 entry_point_name: ''
 experiment_id: '0'
-lifecycle_stage: active
+lifecycle_stage: deleted
 run_id: 63d4a5ba85b24b6488bd38e5f2dd1b93
 run_name: evaluation_champion-movie_recommender_v1
 source_name: ''
