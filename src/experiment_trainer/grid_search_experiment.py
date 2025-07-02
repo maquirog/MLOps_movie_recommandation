@@ -100,9 +100,11 @@ def call_predict(run_id=None):
         command += f" --model_source runs:/{run_id}/model"
     subprocess.run(command, shell=True, check=True, stdout=sys.stdout, stderr=sys.stderr)
 
-def call_evaluate():
+def call_evaluate(run_id=None):
     print("📊 Evaluating locally...", flush=True)
     command = "python ../models/evaluate.py"
+    if run_id:
+        command += f" --run_id {run_id}"
     subprocess.run(command, shell=True, check=True, stdout=sys.stdout, stderr=sys.stderr)
 
 
@@ -122,14 +124,14 @@ def train_evaluate_log_run(hyperparams, experiment_id):
     
     call_train(hyperparams, run_id)
     call_predict(run_id=run_id)
-    call_evaluate()
+    call_evaluate(run_id=run_id)
 
     metrics_path = os.path.join(BASE_DIR, "metrics", "scores.json")
     with open(metrics_path, "r") as f:
         metrics = json.load(f)
 
-    mlflow.log_metrics(metrics)
-    mlflow.log_params(hyperparams)
+    # mlflow.log_metrics(metrics)
+    # mlflow.log_params(hyperparams)
 
     if not (active_run and active_run.info.experiment_id == experiment_id):
         mlflow.end_run()
@@ -137,12 +139,12 @@ def train_evaluate_log_run(hyperparams, experiment_id):
     print(f"🔁 Run {run_id} logged with metrics: {metrics}", flush=True)
     return run_id, metrics
 
-def save_best_run_info(experiment_id, best_run_id):
-    shared_dir = os.path.join(BASE_DIR, "shared")
-    os.makedirs(shared_dir, exist_ok=True)
-    path = os.path.join(shared_dir, "best_run.json")
-    with open(path, "w") as f:
-        json.dump({"experiment_id": experiment_id, "best_run_id": best_run_id}, f)
+# def save_best_run_info(experiment_id, best_run_id):
+#     shared_dir = os.path.join(BASE_DIR, "shared")
+#     os.makedirs(shared_dir, exist_ok=True)
+#     path = os.path.join(shared_dir, "best_run.json")
+#     with open(path, "w") as f:
+#         json.dump({"experiment_id": experiment_id, "best_run_id": best_run_id}, f)
 
 def register_model(run_id, model_name="movie_recommender"):
     client = MlflowClient()
@@ -203,7 +205,7 @@ def main():
     print(f"Coverage_10  : {best['coverage']}")
     
     
-    save_best_run_info(experiment_id, best["run_id"])
+    # save_best_run_info(experiment_id, best["run_id"])
     version = register_model(best["run_id"])
     set_model_alias("movie_recommender", version, "Challenger")
 
