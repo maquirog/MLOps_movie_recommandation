@@ -49,52 +49,59 @@ def load_hyperparams_grid():
     return list(product(*hyperparam_grid.values())), keys
 
 # ### === Call API === ###
-# def call_train(hyperparams, run_id=None):
-#     payload = {"hyperparams": hyperparams}
-#     if run_id:
-#         payload["run_id"] = run_id
-#     response = requests.post(f"{API_URL}/train", json=payload)
-#     response.raise_for_status()
-#     print("✅ Model trained successfully.")
-#     return response.json()
+def call_train(hyperparams, run_id=None):
+    payload = {"hyperparams": hyperparams}
+    if run_id:
+        payload["run_id"] = run_id
+    response = requests.post(f"{API_URL}/train", json=payload)
+    
+    try:
+        response.raise_for_status()
+        print("✅ Train API called successfully.")
+        return response.json()  # Retourne la réponse JSON du serveur
+    except requests.HTTPError as e:
+        print(f"❌ Error calling Train API: {e}")
+        print("Response content:", response.text)
+        return None
 
-# def call_predict(user_ids=None, n_recommendations=None):
-#     json_data = {}
-#     if user_ids:
-#         json_data["user_ids"] = user_ids
-#     if n_recommendations:
-#         json_data["n_recommendations"] = n_recommendations
 
-#     if json_data:
-#         response = requests.post(f"{API_URL}/predict", json=json_data)
-#     else:
-#         response = requests.post(f"{API_URL}/predict")
-#     response.raise_for_status()
-#     print("✅ Predictions generated and saved.")
-#     return response.json()
 
-# def call_evaluate():
-#     response = requests.post(f"{API_URL}/evaluate")
-#     response.raise_for_status()
-#     print("✅ Evaluation complete.")
-#     return response.json()
+def call_predict(user_ids=None, n_recommendations=None):
+    json_data = {}
+    if user_ids:
+        json_data["user_ids"] = user_ids
+    if n_recommendations:
+        json_data["n_recommendations"] = n_recommendations
 
-### === Call en local === ###
-
-def call_train(hyperparams, run_id):
-    json_params = json.dumps(hyperparams)
-    command = f"python ../models/train.py --hyperparams_dict '{json_params}' --run_id {run_id}"
-    subprocess.run(command, shell=True, check=True, stdout=sys.stdout, stderr=sys.stderr)
-
-def call_predict():
-    print("🧠 Predicting locally...", flush=True)
-    command = "python ../models/predict.py"
-    subprocess.run(command, shell=True, check=True, stdout=sys.stdout, stderr=sys.stderr)
+    if json_data:
+        response = requests.post(f"{API_URL}/predict", json=json_data)
+    else:
+        response = requests.post(f"{API_URL}/predict")
+    response.raise_for_status()
+    print("✅ Predictions generated and saved.")
+    return response.json()
 
 def call_evaluate():
-    print("📊 Evaluating locally...", flush=True)
-    command = "python ../models/evaluate.py"
-    subprocess.run(command, shell=True, check=True, stdout=sys.stdout, stderr=sys.stderr)
+    response = requests.post(f"{API_URL}/evaluate")
+    response.raise_for_status()
+    print("✅ Evaluation complete.")
+    return response.json()
+
+### === Call en local === ###
+# def call_train(hyperparams, run_id):
+#     json_params = json.dumps(hyperparams)
+#     command = f"python ../models/train.py --hyperparams_dict '{json_params}' --run_id {run_id}"
+#     subprocess.run(command, shell=True, check=True, stdout=sys.stdout, stderr=sys.stderr)
+
+# def call_predict():
+#     print("🧠 Predicting locally...", flush=True)
+#     command = "python ../models/predict.py"
+#     subprocess.run(command, shell=True, check=True, stdout=sys.stdout, stderr=sys.stderr)
+
+# def call_evaluate():
+#     print("📊 Evaluating locally...", flush=True)
+#     command = "python ../models/evaluate.py"
+#     subprocess.run(command, shell=True, check=True, stdout=sys.stdout, stderr=sys.stderr)
 
 
 def train_evaluate_log_run(hyperparams, experiment_id):
@@ -109,7 +116,7 @@ def train_evaluate_log_run(hyperparams, experiment_id):
         run = mlflow.start_run(experiment_id=experiment_id)
         run_id = run.info.run_id
 
-    print(f"🔮🔮🔮🔮 grid search expID: {experiment_id} & run ID:{run_id}", flush=True)
+    print(f"🔮🔮 grid search expID: {experiment_id} & run ID:{run_id}🔮🔮", flush=True)
     
     call_train(hyperparams, run_id)
     call_predict()

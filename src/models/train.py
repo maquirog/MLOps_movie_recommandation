@@ -9,6 +9,7 @@ from mlflow.models.signature import infer_signature
 
 mlflow.set_tracking_uri("http://127.0.0.1:5050")
 
+
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
 
 default_hyperparameters = {
@@ -52,10 +53,12 @@ if __name__ == "__main__":
         exit(1)
 
     # Load the movie matrix
+    print("Chargement des données")
     matrix_path = os.path.join(BASE_DIR, "data", "processed", "movie_matrix.csv")
     movie_matrix = pd.read_csv(matrix_path)
 
     # Train the model
+    print("Entrainement du model")
     model = train_model(movie_matrix, hyperparams)
 
     # Save the model to a file
@@ -63,7 +66,13 @@ if __name__ == "__main__":
     os.makedirs(model_dir, exist_ok=True)
     model_path = os.path.join(model_dir, "model.pkl")
     with open(model_path, "wb") as f:
-        pickle.dump(model, f)   
+        pickle.dump(model, f)
+    print(f"Model sauvegarder sur {model_path}") 
+    
+    # # Save the model to a file original
+    # filehandler = open("models/model.pkl", "wb")
+    # pickle.dump(model, filehandler)
+    # filehandler.close()
     
     # === MLflow logging ===
     # Safety: stop any active run before manually starting one
