@@ -52,6 +52,42 @@ services:
     image: maquirog/evaluate:latest
     command: ["python", "src/models/evaluate.py"]
 
+  trainer_experiment:
+    <<: *common-service
+    image: maquirog/trainer_experiment:latest
+    ports:
+      - "5050:5050"
+    environment:
+      - PYTHONPATH=/app
+      - HOST_PROJECT_PATH=${HOST_PROJECT_PATH}
+    command: ["bash", "src/experiment_trainer/entrypoint.sh"]
+    depends_on:
+      - api
+    volumes:
+      - ./src:/app/src
+      - ./data:/app/data
+      - ./models:/app/models
+      - ./metrics:/app/metrics
+      - ./reports:/app/reports
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      - ./mlruns:/app/mlruns
+      - ./metrics:/app/metrics
+      - ./shared:/app/shared
+
+  # champion_selector:
+  #   <<: *common-service
+  #   ports:
+  #     - "5000:5000"
+  #   environment:
+  #     - PYTHONPATH=/app
+  #   command: ["bash", "src/champion_selector/entrypoint.sh"]
+  #   depends_on:
+  #     - api
+  #   volumes:
+  #     - ./mlruns:/app/mlruns
+  #     - ./metrics:/app/metrics
+  #     - ./shared:/app/shared
+
   api:
     <<: *common-service
     image: maquirog/api:latest

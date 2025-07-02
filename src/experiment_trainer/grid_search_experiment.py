@@ -1,36 +1,43 @@
 from mlflow import MlflowClient
 import mlflow
+import requests
 import os
 import json
 from itertools import product
 import yaml
+import datetime
+import subprocess
+import sys
 import argparse
-from mlflow.exceptions import MlflowException
-from src.utils.calls import call_train_api, call_predict_api, call_evaluate_api, call_train, call_predict, call_evaluate
+import time
 
-# === 🌍 Variables d'environnement === #
-MODEL_NAME = os.environ.get("MODEL_NAME", "movie_recommender")
-MLFLOW_TRACKING_URI = os.environ.get("MLFLOW_TRACKING_URI", "http://mlflow-server:5050")
-BASE_DIR = os.environ.get("BASE_DIR", os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
-DATA_DIR= os.environ.get("DATA_DIR", os.path.join(BASE_DIR, "data"))
-MODELS_DIR = os.environ.get("MODELS_DIR", os.path.join(BASE_DIR, "models"))
-METRIC_KEY = os.environ.get("METRIC_KEY", "ndcg_10")
-
-METRICS_DIR = os.environ.get("METRICS_DIR", os.path.join(BASE_DIR, "metrics"))
-PREDICT_DIR = os.path.join(DATA_DIR, "predictions")
-
-USE_API = True
-
-if USE_API:
-    train_func = call_train_api
-    predict_func = call_predict_api
-    evaluate_func = call_evaluate_api
-else:
-    train_func = call_train
-    predict_func = call_predict
-    evaluate_func = call_evaluate
-
+API_URL = "http://api:8000"
+#API_URL = "http://localhost:8000"
 client = MlflowClient()
+BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
+
+# def create_new_experiment():
+#     now = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+#     experiment_name = f"weekly_experiment_{now}"
+#     try:
+#         experiment_id = client.create_experiment(experiment_name)
+#     except:
+#         experiment = client.get_experiment_by_name(experiment_name)
+#         experiment_id = experiment.experiment_id
+        
+#     print(f"Created experiment: {experiment_name} ({experiment_id})")
+#     return experiment_id
+
+# import time
+
+def get_experiment_id_by_name(name):
+    for _ in range(10):
+        experiment = client.get_experiment_by_name(name)
+        if experiment:
+            return experiment.experiment_id
+        print(f"⏳ Waiting for experiment '{name}' to be registered...", flush=True)
+        time.sleep(1)
+    raise RuntimeError(f"Experiment '{name}' not found.")
 
 
 def load_hyperparams_grid():
@@ -41,115 +48,115 @@ def load_hyperparams_grid():
     keys = list(hyperparam_grid.keys())
     return list(product(*hyperparam_grid.values())), keys
 
-    
-# === MLFlow Run === #
+# ### === Call API === ###
+# def call_train(hyperparams, run_id=None):
+#     payload = {"hyperparams": hyperparams}
+#     if run_id:
+#         payload["run_id"] = run_id
+#     response = requests.post(f"{API_URL}/train", json=payload)
+#     response.raise_for_status()
+#     print("✅ Model trained successfully.")
+#     return response.json()
 
-def train_predict_evaluate_log_run(hyperparams, experiment_id,
-                                   call_train_func=train_func, call_predict_func=predict_func, call_evaluate_func=evaluate_func):
-    with mlflow.start_run() as run:
-        active_run = mlflow.active_run().info
-        run_id = active_run.run_id
-        print(f"🔮🔮 grid search expID: {experiment_id} & run ID:{run_id}🔮🔮", flush=True)
-    
-        # Paths
-        model_source = os.path.join(MODELS_DIR, f"model_{run_id}.pkl")
-        predictions_filename = f"predictions_{run_id}.json"
-        metrics_filename = os.path.join(METRICS_DIR, f"scores_{run_id}.json")
-        
-        # === Pipeline calls === #
-        call_train_func(hyperparams, run_id)
-        call_predict_func(model_source, output_filename = predictions_filename)
-        call_evaluate_func(run_id=run_id, input_filename = predictions_filename, output_filename = metrics_filename)
-        
-        with open(metrics_filename, "r") as f:
-            metrics = json.load(f)
+# def call_predict(user_ids=None, n_recommendations=None):
+#     json_data = {}
+#     if user_ids:
+#         json_data["user_ids"] = user_ids
+#     if n_recommendations:
+#         json_data["n_recommendations"] = n_recommendations
 
-        print(f"📈 Run {run_id} terminée avec succès. Metrics : {metrics}", flush=True)
-        return run_id, metrics
+#     if json_data:
+#         response = requests.post(f"{API_URL}/predict", json=json_data)
+#     else:
+#         response = requests.post(f"{API_URL}/predict")
+#     response.raise_for_status()
+#     print("✅ Predictions generated and saved.")
+#     return response.json()
 
-# === Post-processing === #
+# def call_evaluate():
+#     response = requests.post(f"{API_URL}/evaluate")
+#     response.raise_for_status()
+#     print("✅ Evaluation complete.")
+#     return response.json()
 
-def clean_dirs(best_run_id):
-    # === Nettoyage prédictions ===
-    for f in os.listdir(PREDICT_DIR):
-        full_path = os.path.join(PREDICT_DIR, f)
-        if f != f"predictions_{best_run_id}.json":
-            os.remove(full_path)
+### === Call en local === ###
 
-    pred_old = os.path.join(PREDICT_DIR, f"predictions_{best_run_id}.json")
-    pred_new = os.path.join(PREDICT_DIR, "predictions_challenger.json")
-    if os.path.exists(pred_old):
-        os.rename(pred_old, pred_new)
+def call_train(hyperparams, run_id):
+    json_params = json.dumps(hyperparams)
+    command = f"python ../models/train.py --hyperparams_dict '{json_params}' --run_id {run_id}"
+    subprocess.run(command, shell=True, check=True, stdout=sys.stdout, stderr=sys.stderr)
+
+def call_predict():
+    print("🧠 Predicting locally...", flush=True)
+    command = "python ../models/predict.py"
+    subprocess.run(command, shell=True, check=True, stdout=sys.stdout, stderr=sys.stderr)
+
+def call_evaluate():
+    print("📊 Evaluating locally...", flush=True)
+    command = "python ../models/evaluate.py"
+    subprocess.run(command, shell=True, check=True, stdout=sys.stdout, stderr=sys.stderr)
+
+
+def train_evaluate_log_run(hyperparams, experiment_id):
+    active_run = mlflow.active_run()
+    if active_run and active_run.info.experiment_id == experiment_id:
+        print("✅ Run active est dans la bonne expérience ✅", flush=True)
+        # On réutilise la run active uniquement si elle est bien dans la bonne expérience
+        run = active_run
+        run_id = run.info.run_id
     else:
-        print(f"⚠️ Fichier {pred_old} introuvable pour renommage.", flush=True)
+        print("🚨 Probleme la run n'est pas dans la bonne experience ‼️", flush=True)
+        run = mlflow.start_run(experiment_id=experiment_id)
+        run_id = run.info.run_id
 
-    # === Nettoyage metrics ===
-    if METRICS_DIR:
-        for f in os.listdir(METRICS_DIR):
-            full_path = os.path.join(METRICS_DIR, f)
-            if f != f"scores_{best_run_id}.json":
-                os.remove(full_path)
+    print(f"🔮🔮🔮🔮 grid search expID: {experiment_id} & run ID:{run_id}", flush=True)
+    
+    call_train(hyperparams, run_id)
+    call_predict()
+    call_evaluate()
 
-        metric_old = os.path.join(METRICS_DIR, f"scores_{best_run_id}.json")
-        metric_new = os.path.join(METRICS_DIR, "challenger_scores.json")
-        if os.path.exists(metric_old):
-            os.rename(metric_old, metric_new)
-        else:
-            print(f"⚠️ Fichier {metric_old} introuvable pour renommage.", flush=True)
+    metrics_path = os.path.join(BASE_DIR, "metrics", "scores.json")
+    with open(metrics_path, "r") as f:
+        metrics = json.load(f)
 
-    # === Nettoyage models ===
-    for f in os.listdir(MODELS_DIR):
-        full_path = os.path.join(MODELS_DIR, f)
-        if f not in [f"model_{best_run_id}.pkl", "model_champion.pkl"]:
-            os.remove(full_path)
+    mlflow.log_metrics(metrics)
+    mlflow.log_params(hyperparams)
 
-    model_old = os.path.join(MODELS_DIR, f"model_{best_run_id}.pkl")
-    model_new = os.path.join(MODELS_DIR, "model_challenger.pkl")
-    if os.path.exists(model_old):
-        os.rename(model_old, model_new)
-    else:
-        print(f"⚠️ Fichier {model_old} introuvable pour renommage.", flush=True)
+    if not (active_run and active_run.info.experiment_id == experiment_id):
+        mlflow.end_run()
 
-def register_challenger(run_id, alias="challenger", model_name=MODEL_NAME, metrics_dir = METRICS_DIR):
-    print("💾 New Challenger defined, time to register ", flush=True)
+    print(f"🔁 Run {run_id} logged with metrics: {metrics}", flush=True)
+    return run_id, metrics
+
+def save_best_run_info(experiment_id, best_run_id):
+    shared_dir = os.path.join(BASE_DIR, "shared")
+    os.makedirs(shared_dir, exist_ok=True)
+    path = os.path.join(shared_dir, "best_run.json")
+    with open(path, "w") as f:
+        json.dump({"experiment_id": experiment_id, "best_run_id": best_run_id}, f)
+
+def register_model(run_id, model_name="movie_recommender"):
     client = MlflowClient()
-    
-    try:
-        client.get_registered_model(model_name)
-    except MlflowException:
-        client.create_registered_model(model_name)
-    
     model_version = client.create_model_version(
         name=model_name,
         source=f"runs:/{run_id}/model",
         run_id=run_id
     )
-    
-    with mlflow.start_run(run_id=run_id):
-        mlflow.set_tags({"model_version": model_version.version, "alias": alias, "model_name": model_name})
-    
-    print(f"✅ Model {model_name} version {model_version.version} enregistré et aliasé comme '{alias}'", flush=True)
-    
+    print(f"Model version {model_version.version} registered under '{model_name}'", flush=True)
     return model_version.version
 
-def set_model_alias(version, alias="challenger", model_name=MODEL_NAME):
+def set_model_alias(model_name, version, alias="Challenger"):
     client = MlflowClient()
     client.set_registered_model_alias(
         name=model_name,
         version=version,
         alias=alias)
-    print(f"[Registry] Model version {version} now aliased as '{alias}'", flush=True)
-
-# === Entrypoint === #
+    print(f"[Registry] Model version {version} now aliased as '{alias}'")
+    
 
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--experiment_name", type=str, required=True)
-    parser.add_argument(
-        "--hyperparams_dict",
-        type=str,
-        help="Hyperparameters as JSON string, e.g., '{\"n_neighbors\": 15, \"algorithm\": \"kd_tree\"}'"
-        )
     return parser.parse_args()
 
 def main():
@@ -157,55 +164,39 @@ def main():
     experiment_name = args.experiment_name
     
     # Set l'expérience AVANT de récupérer l'ID ou de commencer les runs
-    mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
-    experiment = mlflow.set_experiment(experiment_name)
+    mlflow.set_tracking_uri("http://127.0.0.1:5050")
     
-    #experiment_id = get_experiment_id_by_name(experiment_name)
-    experiment_id = experiment.experiment_id
-    
+    experiment_id = get_experiment_id_by_name(experiment_name)
     print(f"Experiment id créée: {experiment_name} ({experiment_id})", flush=True)  
+    # experiment_id = create_new_experiment()
 
-    if args.hyperparams_dict is None:
-        param_combinations, keys = load_hyperparams_grid()
-    else:
-        # 🔍 Parse le JSON string en dict
-        try:
-            hyperparams_dict = json.loads(args.hyperparams_dict)
-            if not isinstance(hyperparams_dict, dict):
-                raise ValueError("Le JSON ne représente pas un dictionnaire.")
-        except Exception as e:
-            raise ValueError(f"Erreur de parsing JSON dans --hyperparams_dict: {e}")
-        
-        # 🧱 Structure pour compatibilité avec le for-loop
-        keys = list(hyperparams_dict.keys())
-        values = list(hyperparams_dict.values())
-        param_combinations = list(product(*values))
-        
-    best = {METRIC_KEY: -1, "run_id": None, "params": None}
+    param_combinations, keys = load_hyperparams_grid()
+
+    
+    best = {"coverage": -1, "run_id": None, "params": None}
 
 
     for values in param_combinations:
         hyperparams = dict(zip(keys, values))
-        print(f"🏋️‍♂️ Training with hyperparameters: {hyperparams}", flush=True)
-        run_id, metrics = train_predict_evaluate_log_run(hyperparams, experiment_id)
-        if metrics.get(METRIC_KEY, 0) > best[METRIC_KEY]:
+        print(f"🏋️‍♂️ Training with hyperparameters: {hyperparams}")
+        run_id, metrics = train_evaluate_log_run(hyperparams, experiment_id)
+        if metrics.get("coverage_10", 0) > best["coverage"]:
                 best.update({
-                    METRIC_KEY: metrics[METRIC_KEY],
+                    "coverage": metrics["coverage_10"],
                     "run_id": run_id,
                     "params": hyperparams
                 })
-                
 
 
-    print("\n=== 🏆 Best Run Summary ===", flush=True)
-    print(f"Run ID       : {best['run_id']}", flush=True)
-    print(f"Hyperparams  : {best['params']}", flush=True)
-    print(f"{METRIC_KEY}  : {best[METRIC_KEY]}", flush=True)
+    print("\n=== 🏆 Best Run Summary ===")
+    print(f"Run ID       : {best['run_id']}")
+    print(f"Hyperparams  : {best['params']}")
+    print(f"Coverage_10  : {best['coverage']}")
     
     
-    clean_dirs(best["run_id"])
-    version = register_challenger(best["run_id"])
-    set_model_alias(version, "challenger")
+    save_best_run_info(experiment_id, best["run_id"])
+    version = register_model(best["run_id"])
+    set_model_alias("movie_recommender", version, "Challenger")
 
 if __name__ == "__main__":
     main()

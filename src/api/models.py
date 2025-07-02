@@ -7,21 +7,12 @@ class TrainRequest(BaseModel):
         default=None,
         description="Dictionnaire d'hyperparamètres, ex: {\"n_neighbors\": 10, \"algorithm\": \"kd_tree\"}"
     )
-    run_id: Optional[str] = Field(
-        default=None,
-        description="Identifiant optionnel de run pour tracer l'entraînement"
-    )
+    run_id: Optional[str] = None
 
 class PredictionRequest(BaseModel):
     user_ids: Optional[List[int]] = None  # No default value
     n_recommendations: int = 10
-    model_source: Optional[str] = None
-    output_filename: Optional[str] = None
-    
-class EvaluateRequest(BaseModel):
-    run_id: Optional[str] = None
-    input_filename: Optional[str] = None
-    output_filename: Optional[str] = None
+    source: Optional[str] = "registry:champion"
 
 class PredictionResponse(BaseModel):
     predictions: Dict[int, List[int]]

@@ -5,7 +5,7 @@ FROM python:3.10-slim
 WORKDIR /app
 
 # Installer git (paquet système)
-RUN apt-get update && apt-get install -y git && apt-get install -y curl && pip install pymysql && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
 
 # Copier les fichiers nécessaires pour tous les services
 # COPY ./src /app/src

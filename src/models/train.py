@@ -1,13 +1,15 @@
 import pandas as pd
 from sklearn.neighbors import NearestNeighbors
+import pickle
 import os
 import json
 import argparse
-from datetime import datetime
-import mlflow
 import mlflow.sklearn
-from mlflow.tracking import MlflowClient
 from mlflow.models.signature import infer_signature
+
+mlflow.set_tracking_uri("http://127.0.0.1:5050")
+
+BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
 
 default_hyperparameters = {
     "n_neighbors": 20,
@@ -20,25 +22,17 @@ def train_model(movie_matrix, hyperparams):
     )
     return nbrs
 
-def register_model(run_id, model_name="movie_recommender"):
-    client = MlflowClient()
-    
-    # Enregistre une nouvelle version du modèle dans la registry
-    model_version = client.create_model_version(
-        name=model_name,
-        source=f"runs:/{run_id}/model",
-        run_id=run_id
-    )
-    print(f"Model version {model_version.version} registered under '{model_name}'")
-    return model_version.version
+def log_model_to_mlflow(model, movie_matrix, hyperparams, run_id):
+    with mlflow.start_run(run_id=run_id):
+        mlflow.log_params(hyperparams)
+            
+        example_input = movie_matrix.drop("movieId", axis=1).iloc[[0]]
+        signature = infer_signature(example_input, model.kneighbors(example_input)[1])
 
-def set_model_alias(model_name, version, alias="Challenger"):
-    client = MlflowClient()
-    client.set_registered_model_alias(
-        name=model_name,
-        version=version,
-        alias=alias)
-    print(f"[Registry] Model version {version} now aliased as '{alias}'")
+        mlflow.sklearn.log_model(model, "model", 
+                            signature=signature)
+        print("✅ Model trained and logged.")
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -49,10 +43,7 @@ if __name__ == "__main__":
         help="Hyperparameters as JSON string, e.g., '{\"n_neighbors\": 15, \"algorithm\": \"kd_tree\"}'"
         )
     parser.add_argument("--run_id", type=str, help="MLflow run ID to use for logging")
-    parser.add_argument("--save_pkl",type=bool, default=True, help="Save model as .pkl locally")
     args = parser.parse_args()
-    
-    mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
     
     try:
         hyperparams = json.loads(args.hyperparams_dict)
@@ -60,36 +51,25 @@ if __name__ == "__main__":
         print("Error: hyperparams_dict must be a valid JSON string.")
         exit(1)
 
-    # Ensure the models directory exists
-    os.makedirs("models", exist_ok=True)
-    
-    # Chargement des données
-    movie_matrix = pd.read_csv("data/processed/movie_matrix.csv")
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    # Load the movie matrix
+    matrix_path = os.path.join(BASE_DIR, "data", "processed", "movie_matrix.csv")
+    movie_matrix = pd.read_csv(matrix_path)
 
-    with mlflow.start_run(run_name=f"model__{timestamp}") as run:
-        run_id = run.info.run_id
-        mlflow.log_params(hyperparams)
-        model = train_model(movie_matrix, hyperparams)
-        
-        # Signature et exemple pour éviter les warnings
-        example_input = movie_matrix.drop("movieId", axis=1).iloc[[0]]
-        signature = infer_signature(example_input, model.kneighbors(example_input)[1])
-        
-        
-        mlflow.sklearn.log_model(
-            model, 
-            artifact_path="model",
-            input_example=example_input,
-            signature=signature
-            )
-        
- 
-        print(f"[MLflow] Modèle loggé avec run_id: {run_id}")
+    # Train the model
+    model = train_model(movie_matrix, hyperparams)
 
-    # Register model in MLflow Registry
-    model_name = "movie_recommender"
-    version = register_model(run_id, model_name)
+    # Save the model to a file
+    model_dir = os.path.join(BASE_DIR, "models")
+    os.makedirs(model_dir, exist_ok=True)
+    model_path = os.path.join(model_dir, "model.pkl")
+    with open(model_path, "wb") as f:
+        pickle.dump(model, f)   
     
-    # Attribution d’un alias
-    set_model_alias(model_name, version, alias="Challenger")
+    # === MLflow logging ===
+    # Safety: stop any active run before manually starting one
+    print(f"grid search run ID:{args.run_id}")
+    if args.run_id:
+        print(f"📌 Logging to existing MLflow run ID: {args.run_id}")
+        log_model_to_mlflow(model, movie_matrix, hyperparams, args.run_id)
+    else:
+        print("❌ Error: run_id not provided. Skipping MLflow logging.")

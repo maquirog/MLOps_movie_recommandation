@@ -1,11 +1,12 @@
 import pandas as pd
+import pickle
 import numpy as np
 import json
 import os
 import argparse
 from typing import List, Dict, Union
-import mlflow.sklearn
 
+BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
 
 def load_user_data(user_matrix: Union[str, pd.DataFrame], users_id: List[int] = None) -> pd.DataFrame:
     """
@@ -24,15 +25,19 @@ def load_user_data(user_matrix: Union[str, pd.DataFrame], users_id: List[int] = 
         user_matrix = user_matrix[user_matrix["userId"].isin(users_id)]
     return user_matrix
 
-def load_model_from_registry(alias, model_name="movie_recommender"):
-    try:
-        model = mlflow.sklearn.load_model(f"models:/{model_name}@{alias}")
-        print(f"✅ Modèle '{alias}' chargé.")
-        return model
-    except Exception as e:
-        print(f"⚠️ Impossible de charger le modèle '{alias}': {e}")
-        return None
-    
+def load_model(model_filename: str):
+    """
+    Loads a model from a pickle file.
+
+    Args:
+        model_filename: Path to the pickle file containing the model.
+
+    Returns:
+        Loaded model.
+    """
+    with open(model_filename, "rb") as filehandler:
+        model = pickle.load(filehandler)
+    return model
 
 def make_predictions(model, user_data: pd.DataFrame, n_recos: int = 10) -> Dict[int, List[int]]:
     """
@@ -49,7 +54,6 @@ def make_predictions(model, user_data: pd.DataFrame, n_recos: int = 10) -> Dict[
     original_ids = user_data["userId"].values
     features = user_data.drop("userId", axis=1)
     _, indices = model.kneighbors(features)
-    print(f"Prédiction pour le model {model}")
     selection = indices[:, :n_recos]
     prediction_dict = {
         int(user_id): list(map(int, movie_indices))
@@ -93,25 +97,18 @@ if __name__ == "__main__":
         all_users = pd.read_csv(user_matrix_path)
         users_id = all_users["userId"].tolist()
 
-    user_data = load_user_data("data/processed/user_matrix.csv", users_id)
-    
-    # Load models 
-    challenger_model = load_model_from_registry(model_name="movie_recommender", alias="challenger")
-    champion_model = load_model_from_registry(model_name="movie_recommender", alias="champion")
-    
+    # Load user data and model
+    user_data = load_user_data(user_matrix_path, users_id)
+    model_path = os.path.join(BASE_DIR, "models/model.pkl")
+    model = load_model(model_path)
+
     # Generate predictions
-    print("🚀 Génération des prédictions pour le challenger...")
-    predictions_challenger = make_predictions(challenger_model, user_data, n_recos=args.n_recommendations)
-    
-    print("🏆 Génération des prédictions pour le champion...")
-    predictions_champion = {}
-    if champion_model is not None:
-        predictions_champion = make_predictions(champion_model, user_data, n_recos=args.n_recommendations)
-    else:
-        print("⚠️ Pas de modèle 'champion' disponible, pas de prédiction générée pour ce modèle.")
+    predictions = make_predictions(model, user_data, n_recos=args.n_recommendations)
 
     # Save predictions to file by default unless --no_save_to_file is provided
+    predictions_path = os.path.join(BASE_DIR, "data/prediction/predictions.json")
     if not args.no_save_to_file:
-        save_predictions_to_file(predictions_challenger, "data/prediction/predictions_challenger.json")
-        save_predictions_to_file(predictions_champion, "data/prediction/predictions_champion.json")
+        save_predictions_to_file(predictions, predictions_path)
 
+    # Print predictions
+    # print(predictions)
