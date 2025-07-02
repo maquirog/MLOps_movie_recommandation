@@ -5,6 +5,7 @@ import json
 import os
 import argparse
 from typing import List, Dict, Union
+import mlflow
 
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
 
@@ -25,19 +26,50 @@ def load_user_data(user_matrix: Union[str, pd.DataFrame], users_id: List[int] = 
         user_matrix = user_matrix[user_matrix["userId"].isin(users_id)]
     return user_matrix
 
-def load_model(model_filename: str):
+# def load_model(model_filename: str):
+#     """
+#     Loads a model from a pickle file.
+
+#     Args:
+#         model_filename: Path to the pickle file containing the model.
+
+#     Returns:
+#         Loaded model.
+#     """
+#     with open(model_filename, "rb") as filehandler:
+#         model = pickle.load(filehandler)
+#     return model
+
+def load_model_from_source(model_source: str, registry=False, alias=None):
     """
-    Loads a model from a pickle file.
+    Load model from a pickle file, MLflow alias, or MLRun URI.
 
     Args:
-        model_filename: Path to the pickle file containing the model.
+        model_source: Path to .pkl file, or mlflow alias (mlflow:model_name@stage),
+                      or mlrun URI (mlrun:project/function).
 
     Returns:
         Loaded model.
     """
-    with open(model_filename, "rb") as filehandler:
-        model = pickle.load(filehandler)
-    return model
+    if model_source.endswith(".pkl"):
+        with open(model_source, "rb") as f:
+            model = pickle.load(f)
+        return model
+    
+    elif model_source.startswith("runs:/"):
+        model = mlflow.sklearn.load_model(model_source)
+        print(f"✅ Modèle '{model_source} @{alias}' chargé.")
+        return model
+    
+    # elif registry:
+    #     model = mlflow.sklearn.load_model(f"models:/{model_source}@{alias}")
+    #     print(f"✅ Modèle '{model_source} @{alias}' chargé.")
+    #     return model
+    
+    else:
+        print("problemes")
+    
+
 
 def make_predictions(model, user_data: pd.DataFrame, n_recos: int = 10) -> Dict[int, List[int]]:
     """
@@ -75,11 +107,12 @@ def save_predictions_to_file(predictions: Dict[int, List[int]], output_path: str
     print(f"✅ Predictions saved to {output_path}")
 
 if __name__ == "__main__":
-    # Parse command-line arguments
+    # Parse command-line arguments  
     parser = argparse.ArgumentParser(description="Predict movies for users.")
     parser.add_argument("--user_ids", type=str, help="Comma-separated list of user IDs (e.g., '1,2,3').")
-    parser.add_argument("--n_recommendations", type=int, default=10, help="Number of recommendations to generate per user.")
-    parser.add_argument("--no_save_to_file", action="store_true", help="Flag to disable saving predictions to a file.")
+    parser.add_argument("--n_recommendations", type=int, default=10, help="Number of recommendations per user.")
+    parser.add_argument("--model_source", type=str, required=True,help="Path to .pkl, mlflow:model@stage, or runs:/<run_id>/model")
+    parser.add_argument("--no_save_to_file", action="store_true", help="Disable saving predictions to a file.")
     args = parser.parse_args()
 
     # Load user data
@@ -94,8 +127,7 @@ if __name__ == "__main__":
 
     # Load user data and model
     user_data = load_user_data(user_matrix_path, users_id)
-    model_path = os.path.join(BASE_DIR, "models/model.pkl")
-    model = load_model(model_path)
+    model = load_model_from_source(args.model_source)
 
     # Generate predictions
     predictions = make_predictions(model, user_data, n_recos=args.n_recommendations)
