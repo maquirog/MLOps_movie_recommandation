@@ -1,9 +1,9 @@
 aliases:
-  Challenger: '22'
+  Challenger: '23'
   Champion: '2'
 creation_timestamp: 1751200800674
 deployment_job_id: null
 deployment_job_state: null
 description: null
-last_updated_timestamp: 1751453754334
+last_updated_timestamp: 1751456897848
 name: movie_recommender
