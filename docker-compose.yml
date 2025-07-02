@@ -65,9 +65,9 @@ services:
       - ./metrics:/app/metrics
       - ./reports:/app/reports
       - "/var/run/docker.sock:/var/run/docker.sock"
-      - ./mlruns:/app/mlruns
-      - ./metrics:/app/metrics
       - ./shared:/app/shared
+      - ${HOST_PROJECT_PATH}/mlruns:/app/mlruns
+      - ${HOST_PROJECT_PATH}/metrics:/app/metrics
 
   # champion_selector:
   #   <<: *common-service
