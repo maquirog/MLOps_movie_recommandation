@@ -1,0 +1,11 @@
+name: movie_grid_search
+
+entry_points:
+  main:
+    parameters:
+      experiment_name: {type: str}
+    command: >
+      python grid_search_experiment.py --experiment_name {experiment_name}
+
+experiment:
+  name: {experiment_name}

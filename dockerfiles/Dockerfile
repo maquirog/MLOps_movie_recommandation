@@ -4,12 +4,15 @@ FROM python:3.10-slim
 # Définir le répertoire de travail à l'intérieur du conteneur
 WORKDIR /app
 
+# Installer git (paquet système)
+RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
+
 # Copier les fichiers nécessaires pour tous les services
-COPY ./src /app/src
-COPY ./data /app/data
-COPY ./evidently /app/evidently
-COPY ./models /app/models
-COPY ./metrics /app/metrics
+# COPY ./src /app/src
+# COPY ./data /app/data
+# COPY ./evidently /app/evidently
+# COPY ./models /app/models
+# COPY ./metrics /app/metrics
 
 COPY ./requirements/requirements.txt /app/requirements.txt
 

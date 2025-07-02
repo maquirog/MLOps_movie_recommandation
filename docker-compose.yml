@@ -10,7 +10,6 @@ x-common-service: &common-service
     - ./models:/app/models
     - ./metrics:/app/metrics
     - ./reports:/app/reports
-    - ./evidently/workspace:/app/evidently/workspace
     - "/var/run/docker.sock:/var/run/docker.sock"
   working_dir: /app
   restart: "no"
@@ -48,19 +47,41 @@ services:
     image: maquirog/evaluate:latest
     command: ["python", "src/models/evaluate.py"]
 
-  experiment:
+  trainer_experiment:
     <<: *common-service
+    image: maquirog/trainer_experiment:latest
     ports:
-      - "5000:5000"
+      - "5050:5050"
     environment:
       - PYTHONPATH=/app
       - HOST_PROJECT_PATH=${HOST_PROJECT_PATH}
-    command: ["bash", "src/experiment/entrypoint.sh"]
+    command: ["bash", "src/experiment_trainer/entrypoint.sh"]
     depends_on:
       - api
     volumes:
-      - ${HOST_PROJECT_PATH}/mlruns:/app/mlruns
-      - ${HOST_PROJECT_PATH}/metrics:/app/metrics
+      - ./src:/app/src
+      - ./data:/app/data
+      - ./models:/app/models
+      - ./metrics:/app/metrics
+      - ./reports:/app/reports
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      - ./mlruns:/app/mlruns
+      - ./metrics:/app/metrics
+      - ./shared:/app/shared
+
+  # champion_selector:
+  #   <<: *common-service
+  #   ports:
+  #     - "5000:5000"
+  #   environment:
+  #     - PYTHONPATH=/app
+  #   command: ["bash", "src/champion_selector/entrypoint.sh"]
+  #   depends_on:
+  #     - api
+  #   volumes:
+  #     - ./mlruns:/app/mlruns
+  #     - ./metrics:/app/metrics
+  #     - ./shared:/app/shared
 
   api:
     <<: *common-service
@@ -75,14 +96,7 @@ services:
   evidently:
     <<: *common-service
     image: maquirog/evidently:latest
-    ports:
-      - "8001:8001"
-    command: >
-      bash -c "
-        python evidently/simulate_drift.py &&
-        python evidently/run_evidently_report.py &&
-        evidently ui --workspace evidently/workspace --host 0.0.0.0 --port 8001
-      "
+    command: ["bash", "-c", "python evidently/simulate_drift.py && python evidently/run_evidently_report.py"]
 
   prometheus:
     image: prom/prometheus:latest

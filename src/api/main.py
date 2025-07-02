@@ -45,7 +45,8 @@ def trigger_microservice(service_name: str, command: str = None):
 
         # Create and run the container
         container = docker_client.containers.run(
-            image=f"maquirog/{service_name}:latest",
+            # image=f"maquirog/{service_name}:latest",
+            image=f"{service_name}:latest",
             command=command,
             detach=True,
             volumes=volumes,
@@ -101,7 +102,11 @@ def train(request: TrainRequest = Body(default=None)):
         json_params = json.dumps(request.hyperparams)
         hyperparams_arg = f"--hyperparams_dict '{json_params}'"
 
-    command = f"python src/models/train.py {hyperparams_arg}"
+    run_id_arg = ""
+    if request and request.run_id:
+        run_id_arg = f"--run_id {request.run_id}"
+        
+    command = f"python src/models/train.py {hyperparams_arg} {run_id_arg}"
 
     return trigger_microservice(
         service_name="train",
@@ -114,6 +119,7 @@ def predict(request: PredictionRequest = Body(default=None)):
     if not request:
         user_ids_arg = ""  # Default behavior: process all users
         n_recommendations = 10
+        source = "registry:champion"   #nouveau
     else:
         if request.user_ids:
             user_ids = ",".join(map(str, request.user_ids))
@@ -121,10 +127,11 @@ def predict(request: PredictionRequest = Body(default=None)):
         else:
             user_ids_arg = ""  # Default behavior: all users
         n_recommendations = request.n_recommendations
+        source = request.source or "registry:champion" #nouveau
 
     return trigger_microservice(
         service_name="predict",
-        command=f"python src/models/predict.py {user_ids_arg} --n_recommendations {n_recommendations}"
+        command=f"python src/models/predict.py {user_ids_arg} --n_recommendations {n_recommendations} --source {source}"   #source nouveau
     )
 
 @router.post("/evaluate")
