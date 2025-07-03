@@ -18,8 +18,7 @@ MODEL_NAME = os.environ.get("MODEL_NAME", "movie_recommender")
 TRACKING_URI = os.environ.get("MLFLOW_TRACKING_URI", "http://localhost:5050")
 BASE_DIR = os.environ.get("BASE_DIR", os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 DATA_DIR= os.environ.get("DATA_DIR", os.path.join(BASE_DIR, "data"))
-# METRIC_KEY = os.environ.get("METRIC_KEY", "coverage_10")
-METRIC_KEY = "coverage_10"
+METRIC_KEY = os.environ.get("METRIC_KEY", "ndcg_10")
 
 # METRICS_DIR = os.environ.get("METRICS_DIR", os.path.join(BASE_DIR, "metrics"))
 METRICS_DIR = None
@@ -178,9 +177,9 @@ def clean_dirs(run_id):
     # Nettoyage prédictions
     files = os.listdir(PREDICT_DIR)
     # Supprime tout sauf celui à garder
-    # for f in files:
-    #     if f != f"predictions_{run_id}.json":
-    #         os.remove(os.path.join(PREDICT_DIR, f))
+    for f in files:
+        if f != f"predictions_{run_id}.json":
+            os.remove(os.path.join(PREDICT_DIR, f))
     # Renomme après suppression
     old_path = os.path.join(PREDICT_DIR, f"predictions_{run_id}.json")
     new_path = os.path.join(PREDICT_DIR, "predictions_challenger.json")
