@@ -4,6 +4,8 @@ x-common-service: &common-service
   build:
     context: .
     dockerfile: dockerfiles/Dockerfile
+  env_file:
+    - .env
   volumes:
     - ./src:/app/src
     - ./data:/app/data
@@ -11,6 +13,24 @@ x-common-service: &common-service
     - ./metrics:/app/metrics
     - ./reports:/app/reports
     - "/var/run/docker.sock:/var/run/docker.sock"
+  working_dir: /app
+  restart: "no"
+
+x-mlflow-services: &ml-service
+  build:
+    context: .
+    dockerfile: dockerfiles/Dockerfile
+  env_file:
+    - .env
+  volumes:
+      - ./src:/app/src
+      - ./data:/app/data
+      - ./models:/app/models
+      - ./metrics:/app/metrics
+      - ./reports:/app/reports
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      - ./shared:/app/shared
+      - ./mlruns:/app/mlruns
   working_dir: /app
   restart: "no"
 
@@ -40,42 +60,6 @@ services:
     image: maquirog/evaluate:latest
     command: ["python", "src/models/evaluate.py"]
 
-  trainer_experiment:
-    <<: *common-service
-    image: maquirog/trainer_experiment:latest
-    ports:
-      - "5050:5050"
-    environment:
-      - PYTHONPATH=/app
-      - HOST_PROJECT_PATH=${HOST_PROJECT_PATH}
-    command: ["bash", "src/experiment_trainer/entrypoint.sh"]
-    depends_on:
-      - api
-    volumes:
-      - ./src:/app/src
-      - ./data:/app/data
-      - ./models:/app/models
-      - ./metrics:/app/metrics
-      - ./reports:/app/reports
-      - "/var/run/docker.sock:/var/run/docker.sock"
-      - ./shared:/app/shared
-      - ${HOST_PROJECT_PATH}/mlruns:/app/mlruns
-      - ${HOST_PROJECT_PATH}/metrics:/app/metrics
-
-  # champion_selector:
-  #   <<: *common-service
-  #   ports:
-  #     - "5000:5000"
-  #   environment:
-  #     - PYTHONPATH=/app
-  #   command: ["bash", "src/champion_selector/entrypoint.sh"]
-  #   depends_on:
-  #     - api
-  #   volumes:
-  #     - ./mlruns:/app/mlruns
-  #     - ./metrics:/app/metrics
-  #     - ./shared:/app/shared
-
   api:
     <<: *common-service
     image: maquirog/api:latest
@@ -86,30 +70,92 @@ services:
     environment:
       - HOST_PROJECT_PATH=${HOST_PROJECT_PATH}
 
-  evidently:
-    <<: *common-service
-    image: maquirog/evidently:latest
-    command: ["bash", "-c", "python evidently/simulate_drift.py && python evidently/run_evidently_report.py"]
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: mlflow
+      MYSQL_USER: mlflow_user
+      MYSQL_PASSWORD: mlflow_password
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    restart: unless-stopped
 
-  prometheus:
-    image: prom/prometheus:latest
-    container_name: prometheus
-    volumes:
-      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
-    command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
+  mlflow-server:
+    <<: *ml-service
+    image: maquirog/mlflow-server:latest
+    command: >
+      mlflow server
+      --host 0.0.0.0
+      --port 5050
+      --backend-store-uri mysql+pymysql://mlflow_user:mlflow_password@mysql:3306/mlflow
+      --default-artifact-root /app/mlruns
+      --serve-artifacts
     ports:
-      - "9090:9090"
+      - "5050:5050"
     depends_on:
+      - mysql
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5050/api/2.0/mlflow/version"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  trainer_experiment:
+    <<: *ml-service
+    image: maquirog/trainer_experiment:latest
+    environment:
+      - PYTHONPATH=/app
+      - HOST_PROJECT_PATH=${HOST_PROJECT_PATH}
+      - MLFLOW_TRACKING_URI=http://mlflow-server:5050
+    command: ["bash", "src/experiment_trainer/entrypoint.sh"]
+    depends_on:
+      - mlflow-server
       - api
-    
-  grafana:
-    image: grafana/grafana:latest
-    container_name: grafana
-    ports:
-      - "3000:3000"
+
+  champion_selector:
+    <<: *common-service
+    image: maquirog/champion_selector:latest
+    environment:
+      - PYTHONPATH=/app
+      - HOST_PROJECT_PATH=${HOST_PROJECT_PATH}
+      - MLFLOW_TRACKING_URI=http://mlflow-server:5050
+    command: python src/champion-selector/compare_and_promote.py
     depends_on:
-      - prometheus
-    volumes:
-      - ./grafana/provisioning:/etc/grafana/provisioning
-      - ./grafana/dashboards:/var/lib/grafana/dashboards
+      - mlflow-server
+      - api
+
+
+  # evidently:
+  #   <<: *common-service
+  #   image: maquirog/evidently:latest
+  #   command: ["bash", "-c", "python evidently/simulate_drift.py && python evidently/run_evidently_report.py"]
+
+  # prometheus:
+  #   image: prom/prometheus:latest
+  #   container_name: prometheus
+  #   volumes:
+  #     - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+  #   command:
+  #     - '--config.file=/etc/prometheus/prometheus.yml'
+  #   ports:
+  #     - "9090:9090"
+  #   depends_on:
+  #     - api
+    
+  # grafana:
+  #   image: grafana/grafana:latest
+  #   container_name: grafana
+  #   ports:
+  #     - "3000:3000"
+  #   depends_on:
+  #     - prometheus
+  #   volumes:
+  #     - ./grafana/provisioning:/etc/grafana/provisioning
+  #     - ./grafana/dashboards:/var/lib/grafana/dashboards
+
+volumes:
+  mysql-data:
