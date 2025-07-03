@@ -7,8 +7,6 @@ import argparse
 import mlflow.sklearn
 from mlflow.models.signature import infer_signature
 
-mlflow.set_tracking_uri("http://127.0.0.1:5050")
-
 
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
 
