@@ -10,6 +10,7 @@ import mlflow
 BASE_DIR = os.environ.get("BASE_DIR", os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 METRICS_DIR= os.environ.get("METRICS_DIR", os.path.join(BASE_DIR, "metrics"))
 DATA_DIR= os.environ.get("DATA_DIR", os.path.join(BASE_DIR, "data"))
+MLFLOW_TRACKING_URI = os.environ.get("MLFLOW_TRACKING_URI", "http://mlflow-server:5050")
 
 DEFAULT_PREDICTIONS_DIR =os.path.join(DATA_DIR, "predictions")
 
@@ -102,9 +103,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Predict movies for users.")
     parser.add_argument("--user_ids", type=str, help="Comma-separated list of user IDs (e.g., '1,2,3').")
     parser.add_argument("--n_recommendations", type=int, default=10, help="Number of recommendations per user.")
-    parser.add_argument("--model_source", type=str, required=True,help="Path to .pkl, mlflow:model@stage, or runs:/<run_id>/model")
     parser.add_argument("--output_filename", type=str, default="predictions.json", help="Nom du fichier de sortie des prédictions (ex: 'recos_user42.json').")
-    parser.add_argument("--no_save_to_file", action="store_true", help="Disable saving predictions to a file.")
+    parser.add_argument("--no_save_to_file", action="store_true", help="Flag to disable saving predictions to a file.")
+    parser.add_argument("--model_source", type=str, required=True, help="Path to .pkl, mlflow:model@stage, or runs:/<run_id>/model")
     args = parser.parse_args()
 
     mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
@@ -124,11 +125,8 @@ if __name__ == "__main__":
 
     # Generate predictions
     predictions = make_predictions(model, user_data, n_recos=args.n_recommendations)
-
+    
     # Save predictions to file by default unless --no_save_to_file is provided
-    predictions_path = os.path.join(DEFAULT_PREDICTIONS_DIR,args.output_filename)
     if not args.no_save_to_file:
+        predictions_path = os.path.join(DEFAULT_PREDICTIONS_DIR,args.output_filename)
         save_predictions_to_file(predictions, predictions_path)
-
-    # Print predictions
-    # print(predictions)
