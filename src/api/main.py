@@ -1,7 +1,7 @@
 import json  # For formatting JSON responses
 from fastapi import FastAPI, APIRouter, HTTPException, Response
 from fastapi.responses import JSONResponse  # For custom JSON responses
-from src.api.models import TrainRequest, PredictionRequest
+from src.api.models import TrainRequest, PredictionRequest, EvaluateRequest
 import docker
 import os
 from fastapi import Body
@@ -24,7 +24,9 @@ def trigger_microservice(service_name: str, command: str = None):
                 os.path.join(host_project_path, "data"): {"bind": "/app/data", "mode": "rw"},
                 os.path.join(host_project_path, "models"): {"bind": "/app/models", "mode": "rw"},
                 os.path.join(host_project_path, "metrics"): {"bind": "/app/metrics", "mode": "rw"},
+                os.path.join(host_project_path, "predictions"): {"bind": "/app/predictions", "mode": "rw"},
                 os.path.join(host_project_path, "reports"): {"bind": "/app/reports", "mode": "rw"},
+                os.path.join(host_project_path, "mlruns"): {"bind": "/app/mlruns", "mode": "rw"},  # 👈 AJOUT ICI
             }
             # Debug printout
             print("Using bind mounts from host for volumes:")
@@ -37,7 +39,9 @@ def trigger_microservice(service_name: str, command: str = None):
                 "shared_data": {"bind": "/app/data", "mode": "rw"},
                 "shared_models": {"bind": "/app/models", "mode": "rw"},
                 "shared_metrics": {"bind": "/app/metrics", "mode": "rw"},
+                "shared_predictions": {"bind": "/app/predictions", "mode": "rw"},
                 "shared_reports": {"bind": "/app/reports", "mode": "rw"},
+                "shared_mlruns": {"bind": "/app/mlruns", "mode": "rw"}
             }
             print("Using named Docker volumes for volumes:")
             for vol_name, mount_info in volumes.items():
@@ -52,6 +56,7 @@ def trigger_microservice(service_name: str, command: str = None):
             working_dir="/app",
             stdout=True,
             stderr=True,
+            network="mlops_movie_recommandation_default"
         )
 
         # Wait for the container to finish
@@ -95,6 +100,7 @@ def build_features():
 # Training endpoint
 @router.post("/train")
 def train(request: TrainRequest = Body(default=None)):
+    print(f"🎯 Received training request: {request}")
     if not request or request.hyperparams is None:
         hyperparams_arg = ""
     else:
@@ -115,25 +121,39 @@ def train(request: TrainRequest = Body(default=None)):
 # Prediction endpoint
 @router.post("/predict")
 def predict(request: PredictionRequest = Body(default=None)):
-    if not request:
-        user_ids_arg = ""  # Default behavior: process all users
-        n_recommendations = 10
-    else:
+    args = []
+    if request:
         if request.user_ids:
             user_ids = ",".join(map(str, request.user_ids))
-            user_ids_arg = f"--user_ids {user_ids}"
-        else:
-            user_ids_arg = ""  # Default behavior: all users
-        n_recommendations = request.n_recommendations
+            args.append(f"--user_ids {user_ids}")
+        
+        if request.n_recommendations:
+            args.append(f"--n_recommendations {request.n_recommendations}")
+        
+        if request.model_source:
+            args.append(f"--model_source {request.model_source}")
+        
+        if request.output_filename:
+            args.append(f"--output_filename {request.output_filename}")
 
-    return trigger_microservice(
-        service_name="predict",
-        command=f"python src/models/predict.py {user_ids_arg} --n_recommendations {n_recommendations}"
-    )
+    command = f"python src/models/predict.py {' '.join(args)}"
+    return trigger_microservice("predict", command=command)
+    
 
 @router.post("/evaluate")
-def evaluate():
-    return trigger_microservice("evaluate", command="python src/models/evaluate.py")
+def evaluate(request: EvaluateRequest = Body(default=None)):
+    args = []
+
+    if request:
+        if request.run_id:
+            args.append(f"--run_id {request.run_id}")
+        if request.input_filename:
+            args.append(f"--input_filename {request.input_filename}")
+        if request.output_filename:
+            args.append(f"--output_filename {request.output_filename}")
+
+    command = f"python src/models/evaluate.py {' '.join(args)}"
+    return trigger_microservice("evaluate", command=command)
 
 @app.get("/prometheus_metrics", response_class=Response)
 def get_prometheus_metrics():

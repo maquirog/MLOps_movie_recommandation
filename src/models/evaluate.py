@@ -11,6 +11,7 @@ from datetime import datetime
 BASE_DIR = os.environ.get("BASE_DIR", os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 METRICS_DIR= os.environ.get("METRICS_DIR", os.path.join(BASE_DIR, "metrics"))
 DATA_DIR= os.environ.get("DATA_DIR", os.path.join(BASE_DIR, "data"))
+MLFLOW_TRACKING_URI = os.environ.get("MLFLOW_TRACKING_URI", "http://mlflow-server:5050")
 
 # --- DEFAULT --- #
 DEFAULT_PREDICTIONS_DIR =os.path.join(DATA_DIR, "predictions")
@@ -58,7 +59,7 @@ def compute_metrics(favorites, recommendations, total_movies, k=10):
     }
 
 def evaluate_and_save_metrics(favorites, recommendations, run_id=None, 
-                              k=10, output_dir=None):
+                              k=10, output_filename=None):
     total_movies = load_total_movie_count()
     metrics=compute_metrics(favorites, recommendations, total_movies, k)
     
@@ -66,28 +67,27 @@ def evaluate_and_save_metrics(favorites, recommendations, run_id=None,
     print(json.dumps(metrics))
     
     # sauvegarde locale
-    # if output_dir:  
-    #     os.makedirs(output_dir, exist_ok=True)
-    #     file_name = f'scores_{run_id}.json' or 'scores.json'
-    #     output_path = os.path.join(output_dir, file_name)
-    #     with open(output_path, "w") as f:
-    #         json.dump(metrics, f, indent=4)
+    if output_filename:  
+        with open(output_filename, "w") as f:
+            json.dump(metrics, f, indent=4)
            
-    # sauvegarde sur MLflow 
-    if run_id:
-        # print(f"📎 Logging to existing run: {run_id}")
-        with mlflow.start_run(run_id=run_id):
-            mlflow.log_metrics(metrics)
 
-    # print("\n📊 Recommandation Evaluation Metrics")
-    # for key, val in metrics.items():
-    #     print(f"{key}: {val}")
+    print(f"📎 Logging to existing run: {run_id}")
+    with mlflow.start_run(run_id=run_id):
+        mlflow.log_metrics(metrics)
+
+    print("\n📊 Recommandation Evaluation Metrics")
+    for key, val in metrics.items():
+        print(f"{key}: {val}")
     
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--run_id", type=str, default=None, help="MLflow run ID for logging metrics")
-    parser.add_argument("--input_filename", type=str, default="predictions.json", help="Nom du fichier de sortie des prédictions.")
+    parser.add_argument("--run_id", type=str, required=True, help="MLflow run ID for logging metrics")
+    parser.add_argument("--input_filename", type=str, default="predictions.json", help="Nom du fichier d'entré des prédictions.")
+    parser.add_argument("--output_filename", type=str, default="scores.json", help="Nom du fichier de sortie des métrics.")
     args = parser.parse_args()
+    
+    mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
     
     if mlflow.active_run():
         mlflow.end_run()
@@ -98,5 +98,6 @@ if __name__ == "__main__":
     recommendations_path = os.path.join(DEFAULT_PREDICTIONS_DIR, args.input_filename)
     recommended_movies = load_json(recommendations_path)
     
-    run_id= args.run_id
-    evaluate_and_save_metrics(favorite_movies,recommended_movies, run_id=run_id, output_dir=METRICS_DIR)
+    run_id = args.run_id
+    output_filename = args.output_filename
+    evaluate_and_save_metrics(favorite_movies,recommended_movies, run_id=run_id, output_filename=output_filename)
