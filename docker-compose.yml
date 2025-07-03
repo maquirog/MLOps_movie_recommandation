@@ -195,11 +195,6 @@ services:
       - "5050:5050"
     depends_on:
       - mysql
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5050/api/2.0/mlflow/version"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
     restart: unless-stopped
 
   trainer_experiment:
@@ -215,13 +210,13 @@ services:
       - api
 
   champion_selector:
-    <<: *common-service
+    <<: *ml-service
     image: maquirog/champion_selector:latest
     environment:
       - PYTHONPATH=/app
       - HOST_PROJECT_PATH=${HOST_PROJECT_PATH}
       - MLFLOW_TRACKING_URI=http://mlflow-server:5050
-    command: python src/champion-selector/compare_and_promote.py
+    command: python src/champion_selector/compare_and_promote.py
     depends_on:
       - mlflow-server
       - api
