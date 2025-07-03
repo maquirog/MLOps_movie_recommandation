@@ -17,8 +17,13 @@ API_URL = os.environ.get("API_URL", "http://localhost:8000")
 MODEL_NAME = os.environ.get("MODEL_NAME", "movie_recommender")
 TRACKING_URI = os.environ.get("MLFLOW_TRACKING_URI", "http://localhost:5050")
 BASE_DIR = os.environ.get("BASE_DIR", os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+DATA_DIR= os.environ.get("DATA_DIR", os.path.join(BASE_DIR, "data"))
+# METRIC_KEY = os.environ.get("METRIC_KEY", "coverage_10")
+METRIC_KEY = "coverage_10"
+
 # METRICS_DIR = os.environ.get("METRICS_DIR", os.path.join(BASE_DIR, "metrics"))
 METRICS_DIR = None
+PREDICT_DIR = os.path.join(DATA_DIR, "predictions")
 
 mlflow.set_tracking_uri(TRACKING_URI)
 client = MlflowClient()
@@ -100,20 +105,32 @@ def call_train(hyperparams, run_id):
     command = f"python ../models/train.py --hyperparams_dict '{json_params}' --run_id {run_id}"
     subprocess.run(command, shell=True, check=True, stdout=sys.stdout, stderr=sys.stderr)
 
-def call_predict(run_id=None):
+def call_predict(run_id=None, output_filename = None):
     print("🧠 Predicting locally...", flush=True)
     command = "python ../models/predict.py"
     if run_id:
         command += f" --model_source runs:/{run_id}/model"
+    if output_filename:
+        command += f" --output_filename {output_filename}"
     subprocess.run(command, shell=True, check=True, stdout=sys.stdout, stderr=sys.stderr)
 
-def call_evaluate(run_id=None):
+def call_evaluate(run_id=None, input_filename = None):
     print("📊 Evaluating locally...", flush=True)
     command = "python ../models/evaluate.py"
     if run_id:
         command += f" --run_id {run_id}"
+        
+    if input_filename:
+        command += f" --input_filename {input_filename}"
 
-    result = subprocess.run(command, shell=True, capture_output=True, text=True, check=True)
+    try:
+        result = subprocess.run(command, shell=True, capture_output=True, text=True, check=True)
+    except subprocess.CalledProcessError as e:
+        print("⚠️ Evaluate script crashed.")
+        print("stdout:", e.stdout)
+        print("stderr:", e.stderr)
+        return None
+    
     first_line = result.stdout.strip().splitlines()[0]
 
     try:
@@ -125,7 +142,7 @@ def call_evaluate(run_id=None):
         print("Sortie brute :", result.stdout)
         return None
     
-def train_predict_evaluate_log_run(hyperparams, experiment_id, metrics_dir = METRICS_DIR):
+def train_predict_evaluate_log_run(hyperparams, experiment_id):
     active_run = mlflow.active_run()
     if active_run and active_run.info.experiment_id == experiment_id:
         print("✅ Run active est dans la bonne expérience ✅", flush=True)
@@ -133,6 +150,7 @@ def train_predict_evaluate_log_run(hyperparams, experiment_id, metrics_dir = MET
         run = active_run
         run_id = run.info.run_id
     else:
+        # on previent erreur mais lance quand meme pour l'instant
         print("🚨 Probleme la run n'est pas dans la bonne experience ‼️", flush=True)
         run = mlflow.start_run(experiment_id=experiment_id)
         run_id = run.info.run_id
@@ -140,18 +158,15 @@ def train_predict_evaluate_log_run(hyperparams, experiment_id, metrics_dir = MET
     print(f"🔮🔮 grid search expID: {experiment_id} & run ID:{run_id}🔮🔮", flush=True)
     
     call_train(hyperparams, run_id)
-    call_predict(run_id=run_id)
-    metrics = call_evaluate(run_id=run_id) # ou mettre jour pour lire les metric depuis la run
+    
+    predictions_filename = f"predictions_{run_id}.json"
+    
+    call_predict(run_id=run_id, output_filename = predictions_filename)
+    metrics = call_evaluate(run_id=run_id, input_filename=predictions_filename) # ou mettre jour pour lire les metric depuis la run
     
     print("\n📊 Recommandation Evaluation Metrics")
     for key, val in metrics.items():
         print(f"{key}: {val}")
-    
-    if metrics_dir:    
-        metrics_path = f"{run_id}.json"
-        os.makedirs(os.path.dirname(metrics_path), exist_ok=True)
-        with open(metrics_path, "w") as f:
-            json.dump(metrics, f, indent=4)
             
     if not (active_run and active_run.info.experiment_id == experiment_id):
         mlflow.end_run()
@@ -159,14 +174,32 @@ def train_predict_evaluate_log_run(hyperparams, experiment_id, metrics_dir = MET
     print(f"🔁 Run {run_id} logged with metrics: {metrics}", flush=True)
     return run_id, metrics
 
-def clean_metrics_dir(run_id):
+def clean_dirs(run_id):  
+    # Nettoyage prédictions
+    files = os.listdir(PREDICT_DIR)
+    # Supprime tout sauf celui à garder
+    # for f in files:
+    #     if f != f"predictions_{run_id}.json":
+    #         os.remove(os.path.join(PREDICT_DIR, f))
+    # Renomme après suppression
+    old_path = os.path.join(PREDICT_DIR, f"predictions_{run_id}.json")
+    new_path = os.path.join(PREDICT_DIR, "predictions_challenger.json")
+    if os.path.exists(old_path):
+        os.rename(old_path, new_path)
+    else:
+        print(f"⚠️ Fichier {old_path} introuvable pour renommage.")
+            
     if METRICS_DIR:
-        for f in os.listdir(METRICS_DIR):
-            if f == f"{run_id}.json":
-                os.rename(os.path.join(METRICS_DIR, f"{run_id}.json"), 
-                        os.path.join(METRICS_DIR, "challenger_score.json"))
-            else:
-                os.remove(os.path.join(METRICS_DIR, f"{run_id}.json"))
+        files = os.listdir(METRICS_DIR)
+        for f in files:
+            if f != f"{run_id}.json":
+                os.remove(os.path.join(METRICS_DIR, f))
+        old_path = os.path.join(METRICS_DIR, f"{run_id}.json")
+        new_path = os.path.join(METRICS_DIR, "challenger_score.json")
+        if os.path.exists(old_path):
+            os.rename(old_path, new_path)
+        else:
+            print(f"⚠️ Fichier {old_path} introuvable pour renommage.")
 
 def register_challenger(run_id, alias="Challenger", model_name=MODEL_NAME, metrics_dir = METRICS_DIR):
     print("💾 New Challenger defined, time to register ")
@@ -188,7 +221,7 @@ def register_challenger(run_id, alias="Challenger", model_name=MODEL_NAME, metri
         if metrics_dir:
             metrics_path = os.path.join(metrics_dir, "challenger_score.json")
             mlflow.log_artifact(metrics_path)
-    print(f"✅ Model {model_name} version {model_version} enregistré et aliasé comme '{alias}'", flush=True)
+    print(f"✅ Model {model_name} version {model_version.version} enregistré et aliasé comme '{alias}'", flush=True)
     
     return model_version.version
 
@@ -220,16 +253,16 @@ def main():
     param_combinations, keys = load_hyperparams_grid()
 
     
-    best = {"coverage": -1, "run_id": None, "params": None}
+    best = {METRIC_KEY: -1, "run_id": None, "params": None}
 
 
     for values in param_combinations:
         hyperparams = dict(zip(keys, values))
         print(f"🏋️‍♂️ Training with hyperparameters: {hyperparams}")
         run_id, metrics = train_predict_evaluate_log_run(hyperparams, experiment_id)
-        if metrics.get("coverage_10", 0) > best["coverage"]:
+        if metrics.get(METRIC_KEY, 0) > best[METRIC_KEY]:
                 best.update({
-                    "coverage": metrics["coverage_10"],
+                    METRIC_KEY: metrics[METRIC_KEY],
                     "run_id": run_id,
                     "params": hyperparams
                 })
@@ -239,10 +272,10 @@ def main():
     print("\n=== 🏆 Best Run Summary ===")
     print(f"Run ID       : {best['run_id']}")
     print(f"Hyperparams  : {best['params']}")
-    print(f"Coverage_10  : {best['coverage']}")
+    print(f"{METRIC_KEY}  : {best[METRIC_KEY]}")
     
     
-    clean_metrics_dir(best["run_id"])
+    clean_dirs(best["run_id"])
     version = register_challenger(best["run_id"])
     set_model_alias(version, "Challenger")
 

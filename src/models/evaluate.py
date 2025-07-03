@@ -3,15 +3,20 @@ import json
 import numpy as np
 import os
 import mlflow
-from mlflow.tracking import MlflowClient
 import argparse
+from datetime import datetime
 
 # === Chemins adaptés pour une exécution Docker === #
-BASE_DIR = "/app"
-DEFAULT_FAVORITES_PATH = os.path.join(BASE_DIR, "data/processed/user_favorites.json")
-DEFAULT_RECOMMENDATIONS_PATH = os.path.join(BASE_DIR, "data/prediction/predictions.json")
-DEFAULT_MOVIES_CSV = os.path.join(BASE_DIR, "data/processed/movie_matrix.csv")
-DEFAULT_OUTPUT_PATH = os.path.join(BASE_DIR, "metrics/scores.json")
+# --- Env --- #
+BASE_DIR = os.environ.get("BASE_DIR", os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+METRICS_DIR= os.environ.get("METRICS_DIR", os.path.join(BASE_DIR, "metrics"))
+DATA_DIR= os.environ.get("DATA_DIR", os.path.join(BASE_DIR, "data"))
+
+# --- DEFAULT --- #
+DEFAULT_PREDICTIONS_DIR =os.path.join(DATA_DIR, "predictions")
+DEFAULT_FAVORITES_PATH = os.path.join(DATA_DIR, "processed/user_favorites.json")
+DEFAULT_MOVIES_CSV = os.path.join(DATA_DIR, "processed/movie_matrix.csv")
+
 
 def load_json(path):
     with open(path, "r") as f:
@@ -53,19 +58,22 @@ def compute_metrics(favorites, recommendations, total_movies, k=10):
     }
 
 def evaluate_and_save_metrics(favorites, recommendations, run_id=None, 
-                              k=10, alias=None, model_version=None, model_name = None):
+                              k=10, output_dir=None):
     total_movies = load_total_movie_count()
     metrics=compute_metrics(favorites, recommendations, total_movies, k)
     
-    # # sauvegarde locale
-    # if output_path:    
-    #     os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    #     with open(output_path, "w") as f:
-    #         json.dump(metrics, f, indent=4)
-    
     # Impression JSON lisible depuis stdout
     print(json.dumps(metrics))
-            
+    
+    # sauvegarde locale
+    # if output_dir:  
+    #     os.makedirs(output_dir, exist_ok=True)
+    #     file_name = f'scores_{run_id}.json' or 'scores.json'
+    #     output_path = os.path.join(output_dir, file_name)
+    #     with open(output_path, "w") as f:
+    #         json.dump(metrics, f, indent=4)
+           
+    # sauvegarde sur MLflow 
     if run_id:
         # print(f"📎 Logging to existing run: {run_id}")
         with mlflow.start_run(run_id=run_id):
@@ -78,14 +86,17 @@ def evaluate_and_save_metrics(favorites, recommendations, run_id=None,
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--run_id", type=str, default=None, help="MLflow run ID for logging metrics")
+    parser.add_argument("--input_filename", type=str, default="predictions.json", help="Nom du fichier de sortie des prédictions.")
     args = parser.parse_args()
     
-    while mlflow.active_run():
+    if mlflow.active_run():
         mlflow.end_run()
         
     # Charger les films aimés et recommandés
     favorite_movies = load_json(DEFAULT_FAVORITES_PATH)
-    recommended_movies = load_json(DEFAULT_RECOMMENDATIONS_PATH)
+    
+    recommendations_path = os.path.join(DEFAULT_PREDICTIONS_DIR, args.input_filename)
+    recommended_movies = load_json(recommendations_path)
     
     run_id= args.run_id
-    evaluate_and_save_metrics(favorite_movies,recommended_movies, run_id=run_id)
+    evaluate_and_save_metrics(favorite_movies,recommended_movies, run_id=run_id, output_dir=METRICS_DIR)
