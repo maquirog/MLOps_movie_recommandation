@@ -15,6 +15,13 @@ class TrainRequest(BaseModel):
 class PredictionRequest(BaseModel):
     user_ids: Optional[List[int]] = None  # No default value
     n_recommendations: int = 10
+    model_source: Optional[str] = None
+    output_filename: Optional[str] = None
+    
+class EvaluateRequest(BaseModel):
+    run_id: Optional[str] = None
+    input_filename: Optional[str] = None
+    output_filename: Optional[str] = None
 
 class PredictionResponse(BaseModel):
     predictions: Dict[int, List[int]]
