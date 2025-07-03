@@ -14,8 +14,8 @@ TRACKING_URI = os.environ.get("MLFLOW_TRACKING_URI", "http://localhost:5050")
 BASE_DIR = os.environ.get("BASE_DIR", os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 DATA_DIR = os.environ.get("DATA_DIR", os.path.join(BASE_DIR, "data"))
 MODELS_DIR = os.environ.get("MODELS_DIR", os.path.join(BASE_DIR, "models"))
-# METRIC_KEY = os.environ.get("METRIC_KEY", "ndcg_10")
-METRIC_KEY = "coverage_10"
+METRIC_KEY = os.environ.get("METRIC_KEY", "ndcg_10")
+
 
 # METRICS_DIR = os.environ.get("METRICS_DIR", os.path.join(BASE_DIR, "metrics"))
 METRICS_DIR = None
@@ -166,7 +166,7 @@ def export_champion_model_as_pkl(model_name, champion_version, output_dir=MODELS
 
     os.makedirs(os.path.dirname(output_dir), exist_ok=True)
     
-    output_path = f"champion_model_v{champion_version}.pkl"
+    output_path = os.path.join(MODELS_DIR, f"champion_model_v{champion_version}.pkl")
     # Sauvegarde en .pkl
     with open(output_path, "wb") as f:
         pickle.dump(model, f)
