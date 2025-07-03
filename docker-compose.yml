@@ -129,6 +129,38 @@ services:
     depends_on:
       - mlflow-server
       - api
+  
+  reset_mlflow:
+    image: mysql:8.0
+    entrypoint: ["/bin/bash", "-c"]
+    command: >
+      "
+      echo '📦 Suppression des données MySQL...' &&
+      mysql -h mysql -umlflow_user -pmlflow_password mlflow -e \"
+        DELETE FROM logged_model_params;
+        DELETE FROM logged_model_metrics;
+        DELETE FROM logged_model_tags;
+        DELETE FROM latest_metrics;
+        DELETE FROM metrics;
+        DELETE FROM params;
+        DELETE FROM tags;
+        DELETE FROM runs;
+        DELETE FROM model_version_tags;
+        DELETE FROM model_versions;
+        DELETE FROM registered_models;
+        DELETE FROM experiments WHERE experiment_id != 0;
+      \" &&
+      echo '🧨 Suppression des artefacts...' &&
+      rm -rf /app/mlruns/* &&
+      echo '✅ Réinitialisation MLflow terminée.'
+      "
+    volumes:
+      - ./mlruns:/app/mlruns
+    depends_on:
+      - mysql
+    environment:
+      MYSQL_PWD: mlflow_password
+
 
 
   # evidently:
