@@ -26,20 +26,6 @@ def load_user_data(user_matrix: Union[str, pd.DataFrame], users_id: List[int] = 
         user_matrix = user_matrix[user_matrix["userId"].isin(users_id)]
     return user_matrix
 
-# def load_model(model_filename: str):
-#     """
-#     Loads a model from a pickle file.
-
-#     Args:
-#         model_filename: Path to the pickle file containing the model.
-
-#     Returns:
-#         Loaded model.
-#     """
-#     with open(model_filename, "rb") as filehandler:
-#         model = pickle.load(filehandler)
-#     return model
-
 def load_model_from_source(model_source: str, registry=False, alias=None):
     """
     Load model from a pickle file, MLflow alias, or MLRun URI.
@@ -68,7 +54,6 @@ def load_model_from_source(model_source: str, registry=False, alias=None):
     
     else:
         print("problemes")
-    
 
 
 def make_predictions(model, user_data: pd.DataFrame, n_recos: int = 10) -> Dict[int, List[int]]:

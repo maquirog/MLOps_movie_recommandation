@@ -1,14 +1,16 @@
 #!/bin/bash
 
-echo "➡️  Lancement du serveur MLflow..."
-mlflow server \
-  --host 0.0.0.0 \
-  --port 5050 \
-  --backend-store-uri /app/mlruns \
-  --default-artifact-root /app/mlruns &
-
 # Attente pour laisser le temps au serveur de démarrer
-sleep 5
+echo "➡️  Attente que MLflow server soit prêt..."
+for i in {1..20}; do
+  if curl -f http://mlflow-server:5050; then
+    echo "✅ MLflow server prêt."
+    break
+  else
+    echo "⏳ MLflow server pas encore prêt, attente..."
+    sleep 3
+  fi
+done
 
 # Génère le nom d'expérimentation dynamiquement
 now=$(date +"%Y-%m-%d_%H-%M-%S")
@@ -24,4 +26,3 @@ mlflow run src/experiment_trainer \
   -P experiment_name="$experiment_name"
 
 echo "✅ Expérience terminée. MLflow disponible sur http://localhost:5050"
-tail -f /dev/null
