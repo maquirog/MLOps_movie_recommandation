@@ -17,24 +17,6 @@ x-common-service: &common-service
   working_dir: /app
   restart: "no"
 
-x-mlflow-services: &ml-service
-  build:
-    context: .
-    dockerfile: dockerfiles/Dockerfile
-  env_file:
-    - .env
-  volumes:
-      - ./src:/app/src
-      - ./data:/app/data
-      - ./models:/app/models
-      - ./metrics:/app/metrics
-      - ./reports:/app/reports
-      - "/var/run/docker.sock:/var/run/docker.sock"
-      - ./shared:/app/shared
-      - ./mlruns:/app/mlruns
-  working_dir: /app
-  restart: "no"
-
 services:
   import_raw_data:
     <<: *common-service
@@ -136,92 +118,6 @@ services:
       - mlflow-server
   
   reset-mlflow:
-    image: mysql:8.0
-    entrypoint: ["/bin/bash", "-c"]
-    command: >
-      "
-      echo '📦 Suppression des données MySQL...' &&
-      mysql -h mysql -umlflow_user -pmlflow_password mlflow -e \"
-        DELETE FROM logged_model_params;
-        DELETE FROM logged_model_metrics;
-        DELETE FROM logged_model_tags;
-        DELETE FROM latest_metrics;
-        DELETE FROM metrics;
-        DELETE FROM params;
-        DELETE FROM tags;
-        DELETE FROM runs;
-        DELETE FROM model_version_tags;
-        DELETE FROM model_versions;
-        DELETE FROM registered_models;
-        DELETE FROM experiments WHERE experiment_id != 0;
-      \" &&
-      echo '🧨 Suppression des artefacts...' &&
-      rm -rf /app/mlruns/* &&
-      echo '✅ Réinitialisation MLflow terminée.'
-      "
-    volumes:
-      - ./mlruns:/app/mlruns
-    depends_on:
-      - mysql
-    environment:
-      MYSQL_PWD: mlflow_password
-
-
-
-  mysql:
-    image: mysql:8.0
-    environment:
-      MYSQL_ROOT_PASSWORD: rootpassword
-      MYSQL_DATABASE: mlflow
-      MYSQL_USER: mlflow_user
-      MYSQL_PASSWORD: mlflow_password
-    ports:
-      - "3306:3306"
-    volumes:
-      - mysql-data:/var/lib/mysql
-    restart: unless-stopped
-
-  mlflow-server:
-    <<: *ml-service
-    image: maquirog/mlflow-server:latest
-    command: >
-      mlflow server
-      --host 0.0.0.0
-      --port 5050
-      --backend-store-uri mysql+pymysql://mlflow_user:mlflow_password@mysql:3306/mlflow
-      --default-artifact-root /app/mlruns
-      --serve-artifacts
-    ports:
-      - "5050:5050"
-    depends_on:
-      - mysql
-    restart: unless-stopped
-
-  trainer_experiment:
-    <<: *ml-service
-    image: maquirog/trainer_experiment:latest
-    environment:
-      - PYTHONPATH=/app
-      - HOST_PROJECT_PATH=${HOST_PROJECT_PATH}
-      - MLFLOW_TRACKING_URI=http://mlflow-server:5050
-    command: ["bash", "src/experiment_trainer/entrypoint.sh"]
-    depends_on:
-      - mlflow-server
-      - api
-
-  champion_selector:
-    <<: *ml-service
-    image: maquirog/champion_selector:latest
-    environment:
-      - PYTHONPATH=/app
-      - HOST_PROJECT_PATH=${HOST_PROJECT_PATH}
-      - MLFLOW_TRACKING_URI=http://mlflow-server:5050
-    command: python src/champion_selector/compare_and_promote.py
-    depends_on:
-      - mlflow-server
-      - api
-  
-  reset_mlflow:
     image: mysql:8.0
     entrypoint: ["/bin/bash", "-c"]
     command: >

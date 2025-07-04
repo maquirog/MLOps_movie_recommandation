@@ -23,21 +23,18 @@ else
 fi
 echo "ℹ️  Nom de l'expérience : $experiment_name"
 
-# Crée l'expérience weekly
-mlflow experiments create --experiment-name "$experiment_name" || true
+# # Crée l'expérience weekly
+# mlflow experiments create --experiment-name "$experiment_name" || true
 
 
-# Prépare l’argument hyperparams s’il est fourni
+# Hyperparams ?
 if [ -z "$2" ]; then
-  hyperparams_arg=""
-  echo "➡️  Lancement de l'expérience MLflow avec hyperparams prédifinis localement"
+  echo "➡️  Lancement de l'expérience MLflow avec hyperparams prédéfinis localement"
+  python -m src.experiment_trainer.grid_search_experiment --experiment_name "$experiment_name"
 else
-  hyperparams_arg="--hyperparams_dict '$2'"
-  echo "➡️  Lancement de l'expérience MLflow avec hyperparams : $hyperparams_arg"
+  echo "➡️  Lancement de l'expérience MLflow avec hyperparams"
+  python -m src.experiment_trainer.grid_search_experiment --experiment_name "$experiment_name" --hyperparams_dict="$2"
 fi
-
-echo "➡️  Lancement de l'expérience MLflow..."
-python  -m src.experiment_trainer.grid_search_experiment --experiment_name "$experiment_name" $hyperparams_arg
 
 
 echo "✅ Expérience terminée. MLflow disponible sur http://localhost:5050"
