@@ -25,3 +25,7 @@ class EvaluateRequest(BaseModel):
 
 class PredictionResponse(BaseModel):
     predictions: Dict[int, List[int]]
+    
+class TrainerExperimentRequest(BaseModel):
+    experiment_name: Optional[str] = None  
+    hyperparams: Optional[Dict] = None    
