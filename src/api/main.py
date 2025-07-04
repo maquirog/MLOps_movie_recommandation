@@ -1,7 +1,7 @@
 import json  # For formatting JSON responses
 from fastapi import FastAPI, APIRouter, HTTPException, Response
 from fastapi.responses import JSONResponse  # For custom JSON responses
-from src.api.models import TrainRequest, PredictionRequest, EvaluateRequest
+from src.api.models import TrainRequest, PredictionRequest, EvaluateRequest, TrainerExperimentRequest
 import docker
 import os
 from fastapi import Body
@@ -154,6 +154,25 @@ def evaluate(request: EvaluateRequest = Body(default=None)):
 
     command = f"python src/models/evaluate.py {' '.join(args)}"
     return trigger_microservice("evaluate", command=command)
+
+@router.post("/trainer_experiment")
+def run_trainer_experiment(request: TrainerExperimentRequest = Body(...)):
+    # Génère un nom d'expérience si non fourni
+    experiment_name = request.experiment_name
+    if experiment_name is None:
+        import datetime
+        now = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        experiment_name = f"weekly_experiment_{now}"
+
+    # Prépare l’argument hyperparams_dict si fourni
+    if request.hyperparams:
+        json_params = json.dumps(request.hyperparams)
+    else:
+        json_params = ""
+
+    command = f"bash src/experiment_trainer/entrypoint.sh {experiment_name} '{json_params}'"
+    
+    return trigger_microservice(service_name="trainer_experiment", command=command)
 
 @app.get("/prometheus_metrics", response_class=Response)
 def get_prometheus_metrics():
