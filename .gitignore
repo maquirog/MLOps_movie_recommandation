@@ -90,6 +90,5 @@ target/
 # Mlruns
 mlruns/
 
-data/
 metrics/
 models/
