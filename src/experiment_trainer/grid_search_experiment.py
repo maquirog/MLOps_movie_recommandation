@@ -5,7 +5,6 @@ import json
 from itertools import product
 import yaml
 import argparse
-import time
 from mlflow.exceptions import MlflowException
 from src.utils.calls import call_train_api, call_predict_api, call_evaluate_api, call_train, call_predict, call_evaluate
 
@@ -32,29 +31,6 @@ else:
     evaluate_func = call_evaluate
 
 client = MlflowClient()
-
-# def create_new_experiment():
-#     now = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-#     experiment_name = f"weekly_experiment_{now}"
-#     try:
-#         experiment_id = client.create_experiment(experiment_name)
-#     except:
-#         experiment = client.get_experiment_by_name(experiment_name)
-#         experiment_id = experiment.experiment_id
-        
-#     print(f"Created experiment: {experiment_name} ({experiment_id})")
-#     return experiment_id
-
-# import time
-
-# def get_experiment_id_by_name(name):
-#     for _ in range(10):
-#         experiment = client.get_experiment_by_name(name)
-#         if experiment:
-#             return experiment.experiment_id
-#         print(f"⏳ Waiting for experiment '{name}' to be registered...", flush=True)
-#         time.sleep(1)
-#     raise RuntimeError(f"Experiment '{name}' not found.")
 
 
 def load_hyperparams_grid():
@@ -87,7 +63,6 @@ def train_predict_evaluate_log_run(hyperparams, experiment_id,
         
         with open(metrics_filename, "r") as f:
             metrics = json.load(f)
-    
 
         print(f"📈 Run {run_id} terminée avec succès. Metrics : {metrics}", flush=True)
         return run_id, metrics
@@ -150,6 +125,9 @@ def register_challenger(run_id, alias="challenger", model_name=MODEL_NAME, metri
         run_id=run_id
     )
     
+    with mlflow.start_run(run_id=run_id):
+        mlflow.set_tags({"model_version": model_version.version, "alias": alias, "model_name": model_name})
+    
     print(f"✅ Model {model_name} version {model_version.version} enregistré et aliasé comme '{alias}'", flush=True)
     
     return model_version.version
@@ -200,7 +178,8 @@ def main():
         
         # 🧱 Structure pour compatibilité avec le for-loop
         keys = list(hyperparams_dict.keys())
-        param_combinations = [list(hyperparams_dict.values())]
+        values = list(hyperparams_dict.values())
+        param_combinations = list(product(*values))
         
     best = {METRIC_KEY: -1, "run_id": None, "params": None}
 
