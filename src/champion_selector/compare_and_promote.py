@@ -166,7 +166,8 @@ def export_champion_model_as_pkl(model_name, champion_version, output_dir=MODELS
 
     os.makedirs(os.path.dirname(output_dir), exist_ok=True)
     
-    output_path = os.path.join(MODELS_DIR, f"champion_model_v{champion_version}.pkl")
+    output_path = os.path.join(MODELS_DIR, f"model_champion.pkl")
+    
     # Sauvegarde en .pkl
     with open(output_path, "wb") as f:
         pickle.dump(model, f)
