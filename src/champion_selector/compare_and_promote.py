@@ -1,6 +1,7 @@
 import os
 import mlflow
 import pickle
+import json
 from mlflow.tracking import MlflowClient
 from src.utils.calls import  call_predict_api, call_evaluate_api, call_predict, call_evaluate
 
@@ -57,8 +58,13 @@ def predict_evaluate_log_run_champion(latest_champion_run_id, model_version,
                                       call_predict_func=predict_func, call_evaluate_func=evaluate_func):
     predictions_filename="predictions_champion.json"
     model_source = os.path.join(MODELS_DIR,"model_champion.pkl")
+    
+    # Paths
+    model_source = os.path.join(MODELS_DIR,"model_champion.pkl")
+    predictions_filename="predictions_champion.json"
+    metrics_filename = os.path.join(METRICS_DIR, f"champion_scores.json")
+    
     # 1. Prédictions
-    call_predict_func(latest_champion_run_id, output_filename = predictions_filename)
     call_predict_func(model_source, output_filename = predictions_filename)
     
     # 2. Nouvelle run pour logguer les performances du champion sur le nouveau dataset
@@ -66,12 +72,15 @@ def predict_evaluate_log_run_champion(latest_champion_run_id, model_version,
         new_run_id = mlflow.active_run().info.run_id
     
         # 3. Évaluation
-        metrics = call_evaluate_func(run_id=new_run_id, input_filename=predictions_filename)
+        call_evaluate_func(run_id=new_run_id, input_filename=predictions_filename, output_filename = metrics_filename)
     
+        with open(metrics_filename, "r") as f:
+            metrics = json.load(f)
+            
         print("\n📊 Recommandation Evaluation Metrics")
         for key, val in metrics.items():
             print(f"{key}: {val}")
-            
+
 
         mlflow.set_tags({
             "model_version": model_version, 
