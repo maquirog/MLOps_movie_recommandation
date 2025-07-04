@@ -21,11 +21,13 @@ services:
   import_raw_data:
     <<: *common-service
     image: maquirog/import_raw_data:latest
+    platform: linux/amd64
     command: ["python", "src/data/import_raw_data.py"]
 
   prepare_weekly_dataset:
     <<: *common-service
     image: maquirog/prepare_weekly_dataset:latest
+    platform: linux/amd64
     command: ["python", "src/data/prepare_weekly_dataset.py", "${CURRENT_WEEK}"]
     environment:
       - CURRENT_WEEK=${CURRENT_WEEK}
