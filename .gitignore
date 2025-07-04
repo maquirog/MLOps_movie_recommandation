@@ -7,7 +7,7 @@ __pycache__/
 
 # Distribution / packaging
 .Python
-env/
+# env/
 build/
 develop-eggs/
 dist/
@@ -88,8 +88,8 @@ target/
 .mypy_cache/
 
 # Mlruns
-mlruns
+mlruns/
 
-data
-metrics
-models
+data/
+metrics/
+models/
