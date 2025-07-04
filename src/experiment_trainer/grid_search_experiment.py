@@ -47,14 +47,14 @@ client = MlflowClient()
 
 # import time
 
-def get_experiment_id_by_name(name):
-    for _ in range(10):
-        experiment = client.get_experiment_by_name(name)
-        if experiment:
-            return experiment.experiment_id
-        print(f"⏳ Waiting for experiment '{name}' to be registered...", flush=True)
-        time.sleep(1)
-    raise RuntimeError(f"Experiment '{name}' not found.")
+# def get_experiment_id_by_name(name):
+#     for _ in range(10):
+#         experiment = client.get_experiment_by_name(name)
+#         if experiment:
+#             return experiment.experiment_id
+#         print(f"⏳ Waiting for experiment '{name}' to be registered...", flush=True)
+#         time.sleep(1)
+#     raise RuntimeError(f"Experiment '{name}' not found.")
 
 
 def load_hyperparams_grid():
@@ -72,15 +72,7 @@ def train_predict_evaluate_log_run(hyperparams, experiment_id,
                                    call_train_func=train_func, call_predict_func=predict_func, call_evaluate_func=evaluate_func):
     with mlflow.start_run() as run:
         active_run = mlflow.active_run().info
-        if active_run and active_run.experiment_id == experiment_id:
-            print("✅ Run active est dans la bonne expérience ✅", flush=True)
-            # On réutilise la run active uniquement si elle est bien dans la bonne expérience
-            run_id = active_run.run_id
-        else:
-            # on previent erreur mais lance quand meme pour l'instant
-            print("🚨 Probleme la run n'est pas dans la bonne experience ‼️", flush=True)
-            exit(1)
-
+        run_id = active_run.run_id
         print(f"🔮🔮 grid search expID: {experiment_id} & run ID:{run_id}🔮🔮", flush=True)
     
         # Paths
@@ -158,11 +150,6 @@ def register_challenger(run_id, alias="challenger", model_name=MODEL_NAME, metri
         run_id=run_id
     )
     
-    with mlflow.start_run(run_id=run_id):
-        mlflow.set_tags({"model_version": model_version.version, "alias": alias, "model_name": model_name})
-        if metrics_dir:
-            metrics_path = os.path.join(metrics_dir, "challenger_scores.json")
-            mlflow.log_artifact(metrics_path)
     print(f"✅ Model {model_name} version {model_version.version} enregistré et aliasé comme '{alias}'", flush=True)
     
     return model_version.version
@@ -193,9 +180,11 @@ def main():
     
     # Set l'expérience AVANT de récupérer l'ID ou de commencer les runs
     mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
-    mlflow.set_experiment(experiment_name)
+    experiment = mlflow.set_experiment(experiment_name)
     
-    experiment_id = get_experiment_id_by_name(experiment_name)
+    #experiment_id = get_experiment_id_by_name(experiment_name)
+    experiment_id = experiment.experiment_id
+    
     print(f"Experiment id créée: {experiment_name} ({experiment_id})", flush=True)  
 
     if args.hyperparams_dict is None:
