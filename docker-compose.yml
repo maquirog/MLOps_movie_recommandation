@@ -13,24 +13,7 @@ x-common-service: &common-service
     - ./metrics:/app/metrics
     - ./reports:/app/reports
     - "/var/run/docker.sock:/var/run/docker.sock"
-  working_dir: /app
-  restart: "no"
-
-x-mlflow-services: &ml-service
-  build:
-    context: .
-    dockerfile: dockerfiles/Dockerfile
-  env_file:
-    - .env
-  volumes:
-      - ./src:/app/src
-      - ./data:/app/data
-      - ./models:/app/models
-      - ./metrics:/app/metrics
-      - ./reports:/app/reports
-      - "/var/run/docker.sock:/var/run/docker.sock"
-      - ./shared:/app/shared
-      - ./mlruns:/app/mlruns
+    - ./mlruns:/app/mlruns
   working_dir: /app
   restart: "no"
 
@@ -68,7 +51,11 @@ services:
     command: ["uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
     restart: "no"
     environment:
+      - PYTHONPATH=/app
       - HOST_PROJECT_PATH=${HOST_PROJECT_PATH}
+      - MLFLOW_TRACKING_URI=http://mlflow-server:5050
+    depends_on:
+      - mlflow-server
 
   mysql:
     image: mysql:8.0
@@ -84,7 +71,7 @@ services:
     restart: unless-stopped
 
   mlflow-server:
-    <<: *ml-service
+    <<: *common-service
     image: maquirog/mlflow-server:latest
     command: >
       mlflow server
@@ -100,7 +87,7 @@ services:
     restart: unless-stopped
 
   trainer_experiment:
-    <<: *ml-service
+    <<: *common-service
     image: maquirog/trainer_experiment:latest
     environment:
       - PYTHONPATH=/app
@@ -109,10 +96,9 @@ services:
     command: ["bash", "src/experiment_trainer/entrypoint.sh"]
     depends_on:
       - mlflow-server
-      - api
 
   champion_selector:
-    <<: *ml-service
+    <<: *common-service
     image: maquirog/champion_selector:latest
     environment:
       - PYTHONPATH=/app
@@ -121,9 +107,8 @@ services:
     command: python src/champion_selector/compare_and_promote.py
     depends_on:
       - mlflow-server
-      - api
   
-  reset_mlflow:
+  reset-mlflow:
     image: mysql:8.0
     entrypoint: ["/bin/bash", "-c"]
     command: >
