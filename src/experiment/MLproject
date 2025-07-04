@@ -1,5 +1,0 @@
-name: movie_reco
-
-entry_points:
-  main:
-    command: "python grid_search_experiment.py"

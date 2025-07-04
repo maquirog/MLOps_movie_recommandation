@@ -4,14 +4,16 @@ x-common-service: &common-service
   build:
     context: .
     dockerfile: dockerfiles/Dockerfile
+  env_file:
+    - .env
   volumes:
     - ./src:/app/src
     - ./data:/app/data
     - ./models:/app/models
     - ./metrics:/app/metrics
     - ./reports:/app/reports
-    - ./evidently/workspace:/app/evidently/workspace
     - "/var/run/docker.sock:/var/run/docker.sock"
+    - ./mlruns:/app/mlruns
   working_dir: /app
   restart: "no"
 
@@ -19,11 +21,13 @@ services:
   import_raw_data:
     <<: *common-service
     image: maquirog/import_raw_data:latest
+    platform: linux/amd64
     command: ["python", "src/data/import_raw_data.py"]
 
   prepare_weekly_dataset:
     <<: *common-service
     image: maquirog/prepare_weekly_dataset:latest
+    platform: linux/amd64
     command: ["python", "src/data/prepare_weekly_dataset.py", "${CURRENT_WEEK}"]
     environment:
       - CURRENT_WEEK=${CURRENT_WEEK}
@@ -48,20 +52,6 @@ services:
     image: maquirog/evaluate:latest
     command: ["python", "src/models/evaluate.py"]
 
-  experiment:
-    <<: *common-service
-    ports:
-      - "5000:5000"
-    environment:
-      - PYTHONPATH=/app
-      - HOST_PROJECT_PATH=${HOST_PROJECT_PATH}
-    command: ["bash", "src/experiment/entrypoint.sh"]
-    depends_on:
-      - api
-    volumes:
-      - ${HOST_PROJECT_PATH}/mlruns:/app/mlruns
-      - ${HOST_PROJECT_PATH}/metrics:/app/metrics
-
   api:
     <<: *common-service
     image: maquirog/api:latest
@@ -70,19 +60,100 @@ services:
     command: ["uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
     restart: "no"
     environment:
+      - PYTHONPATH=/app
       - HOST_PROJECT_PATH=${HOST_PROJECT_PATH}
+      - MLFLOW_TRACKING_URI=http://mlflow-server:5050
+    depends_on:
+      - mlflow-server
+
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: mlflow
+      MYSQL_USER: mlflow_user
+      MYSQL_PASSWORD: mlflow_password
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    restart: unless-stopped
+
+  mlflow-server:
+    <<: *common-service
+    image: maquirog/mlflow-server:latest
+    command: >
+      mlflow server
+      --host 0.0.0.0
+      --port 5050
+      --backend-store-uri mysql+pymysql://mlflow_user:mlflow_password@mysql:3306/mlflow
+      --default-artifact-root /app/mlruns
+      --serve-artifacts
+    ports:
+      - "5050:5050"
+    depends_on:
+      - mysql
+    restart: unless-stopped
+
+  trainer_experiment:
+    <<: *common-service
+    image: maquirog/trainer_experiment:latest
+    environment:
+      - PYTHONPATH=/app
+      - HOST_PROJECT_PATH=${HOST_PROJECT_PATH}
+      - MLFLOW_TRACKING_URI=http://mlflow-server:5050
+    command: ["bash", "src/experiment_trainer/entrypoint.sh"]
+    depends_on:
+      - mlflow-server
+
+  champion_selector:
+    <<: *common-service
+    image: maquirog/champion_selector:latest
+    environment:
+      - PYTHONPATH=/app
+      - HOST_PROJECT_PATH=${HOST_PROJECT_PATH}
+      - MLFLOW_TRACKING_URI=http://mlflow-server:5050
+    command: python src/champion_selector/compare_and_promote.py
+    depends_on:
+      - mlflow-server
+  
+  reset-mlflow:
+    image: mysql:8.0
+    entrypoint: ["/bin/bash", "-c"]
+    command: >
+      "
+      echo '📦 Suppression des données MySQL...' &&
+      mysql -h mysql -umlflow_user -pmlflow_password mlflow -e \"
+        DELETE FROM logged_model_params;
+        DELETE FROM logged_model_metrics;
+        DELETE FROM logged_model_tags;
+        DELETE FROM latest_metrics;
+        DELETE FROM metrics;
+        DELETE FROM params;
+        DELETE FROM tags;
+        DELETE FROM runs;
+        DELETE FROM model_version_tags;
+        DELETE FROM model_versions;
+        DELETE FROM registered_models;
+        DELETE FROM experiments WHERE experiment_id != 0;
+      \" &&
+      echo '🧨 Suppression des artefacts...' &&
+      rm -rf /app/mlruns/* &&
+      echo '✅ Réinitialisation MLflow terminée.'
+      "
+    volumes:
+      - ./mlruns:/app/mlruns
+    depends_on:
+      - mysql
+    environment:
+      MYSQL_PWD: mlflow_password
+
+
 
   evidently:
     <<: *common-service
     image: maquirog/evidently:latest
-    ports:
-      - "8001:8001"
-    command: >
-      bash -c "
-        python evidently/simulate_drift.py &&
-        python evidently/run_evidently_report.py &&
-        evidently ui --workspace evidently/workspace --host 0.0.0.0 --port 8001
-      "
+    command: ["bash", "-c", "python evidently/simulate_drift.py && python evidently/run_evidently_report.py"]
 
   prometheus:
     image: prom/prometheus:latest
@@ -106,3 +177,6 @@ services:
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning
       - ./grafana/dashboards:/var/lib/grafana/dashboards
+
+volumes:
+  mysql-data:

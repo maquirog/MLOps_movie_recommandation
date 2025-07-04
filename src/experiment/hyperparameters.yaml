@@ -1,3 +1,0 @@
-hyperparameters:
-  n_neighbors: [10, 20]
-  algorithm: ['ball_tree', 'kd_tree']

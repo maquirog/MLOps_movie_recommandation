@@ -57,7 +57,7 @@ docs/_build/
 target/
 
 # DotEnv configuration
-.env
+# .env
 
 # Database
 *.db
@@ -86,3 +86,9 @@ target/
 
 # Mypy cache
 .mypy_cache/
+
+# Mlruns
+mlruns/
+
+metrics/
+models/
