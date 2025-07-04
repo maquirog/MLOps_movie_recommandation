@@ -196,7 +196,7 @@ def run_champion_selector():
 
 @app.get("/prometheus_metrics", response_class=Response)
 def get_prometheus_metrics():
-    metrics_path = "metrics/scores.json"
+    metrics_path = "metrics/champion_scores.json"
     if not os.path.isfile(metrics_path):
         return Response(content="# Metrics file not found\n", media_type="text/plain", status_code=404)
     with open(metrics_path, "r") as f:
