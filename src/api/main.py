@@ -56,7 +56,20 @@ def trigger_microservice(service_name: str, command: str = None):
             working_dir="/app",
             stdout=True,
             stderr=True,
-            network="mlops_movie_recommandation_default"
+            network="mlops_movie_recommandation_default",
+            environment=[
+                "PYTHONPATH=/app",
+                f"HOST_PROJECT_PATH={os.environ.get('HOST_PROJECT_PATH', '')}",
+                f"MLFLOW_TRACKING_URI={os.environ.get('MLFLOW_TRACKING_URI', '')}",
+                f"MLFLOW_EXPERIMENT_NAME={os.environ.get('MLFLOW_EXPERIMENT_NAME', '')}",
+                f"API_URL={os.environ.get('API_URL', '')}",
+                f"DATA_DIR={os.environ.get('DATA_DIR', '')}",
+                f"MODELS_DIR={os.environ.get('MODELS_DIR', '')}",
+                f"METRICS_DIR={os.environ.get('METRICS_DIR', '')}",
+                f"CHAMPION_PKL_PATH={os.environ.get('CHAMPION_PKL_PATH', '')}",
+                f"MODEL_NAME={os.environ.get('MODEL_NAME', '')}",
+                f"METRIC_KEY={os.environ.get('METRIC_KEY', '')}"
+                ]
         )
 
         # Wait for the container to finish
@@ -173,6 +186,13 @@ def run_trainer_experiment(request: TrainerExperimentRequest = Body(...)):
     command = f"bash src/experiment_trainer/entrypoint.sh {experiment_name} '{json_params}'"
     
     return trigger_microservice(service_name="trainer_experiment", command=command)
+
+@router.post("/run_champion_selector")
+def run_champion_selector():
+    return trigger_microservice(
+        service_name="champion_selector",
+        command="python src/champion_selector/compare_and_promote.py"
+    )
 
 @app.get("/prometheus_metrics", response_class=Response)
 def get_prometheus_metrics():

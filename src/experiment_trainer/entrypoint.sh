@@ -23,9 +23,6 @@ else
 fi
 echo "ℹ️  Nom de l'expérience : $experiment_name"
 
-# # Crée l'expérience weekly
-# mlflow experiments create --experiment-name "$experiment_name" || true
-
 
 # Hyperparams ?
 if [ -z "$2" ]; then

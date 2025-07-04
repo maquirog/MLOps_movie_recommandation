@@ -2,89 +2,31 @@ import os
 import mlflow
 import pickle
 from mlflow.tracking import MlflowClient
-import requests
-import json
-import subprocess
-import sys
+from src.utils.calls import  call_predict_api, call_evaluate_api, call_predict, call_evaluate
 
 # === 🌍 Variables d'environnement === #
-API_URL = os.environ.get("API_URL", "http://localhost:8000")
+API_URL = os.environ.get("API_URL", "http://api:8000")
 MODEL_NAME = os.environ.get("MODEL_NAME", "movie_recommender")
-TRACKING_URI = os.environ.get("MLFLOW_TRACKING_URI", "http://localhost:5050")
+TRACKING_URI = os.environ.get("MLFLOW_TRACKING_URI", "http://mlflow-server:5050")
 BASE_DIR = os.environ.get("BASE_DIR", os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 DATA_DIR = os.environ.get("DATA_DIR", os.path.join(BASE_DIR, "data"))
 MODELS_DIR = os.environ.get("MODELS_DIR", os.path.join(BASE_DIR, "models"))
 METRIC_KEY = os.environ.get("METRIC_KEY", "ndcg_10")
 
 
-# METRICS_DIR = os.environ.get("METRICS_DIR", os.path.join(BASE_DIR, "metrics"))
-METRICS_DIR = None
+METRICS_DIR = os.environ.get("METRICS_DIR", os.path.join(BASE_DIR, "metrics"))
 PREDICT_DIR = os.path.join(DATA_DIR, "prediction")
+
+USE_API = True
+if USE_API:
+    predict_func = call_predict_api
+    evaluate_func = call_evaluate_api
+else:
+    predict_func = call_predict
+    evaluate_func = call_evaluate
 
 mlflow.set_tracking_uri(TRACKING_URI)
 client = MlflowClient()
-
-
-
-### === Call en local === ###
-def call_predict(run_id=None, output_filename = None):
-    print("🧠 Predicting locally...", flush=True)
-    command = f"python {BASE_DIR}/src/models/predict.py"
-    if run_id:
-        command += f" --model_source runs:/{run_id}/model"
-    if output_filename:
-        command += f" --output_filename {output_filename}"
-    subprocess.run(command, shell=True, check=True, stdout=sys.stdout, stderr=sys.stderr)
-
-    
-def call_evaluate(run_id=None, input_filename = None):
-    print("📊 Evaluating locally...", flush=True)
-    command = f"python {BASE_DIR}/src//models/evaluate.py"
-    if run_id:
-        command += f" --run_id {run_id}"
-        
-    if input_filename:
-        command += f" --input_filename {input_filename}"
-
-    try:
-        result = subprocess.run(command, shell=True, capture_output=True, text=True, check=True)
-    except subprocess.CalledProcessError as e:
-        print("⚠️ Evaluate script crashed.")
-        print("stdout:", e.stdout)
-        print("stderr:", e.stderr)
-        return None
-    
-    first_line = result.stdout.strip().splitlines()[0]
-
-    try:
-        metrics = json.loads(first_line)
-        print("✅ Metrics récupérées :", metrics)
-        return metrics
-    except json.JSONDecodeError:
-        print("⚠️ Impossible de parser les métriques retournées.")
-        print("Sortie brute :", result.stdout)
-        return None
-    
-# def call_predict(user_ids=None, n_recommendations=None):
-#     json_data = {}
-#     if user_ids:
-#         json_data["user_ids"] = user_ids
-#     if n_recommendations:
-#         json_data["n_recommendations"] = n_recommendations
-
-#     if json_data:
-#         response = requests.post(f"{API_URL}/predict", json=json_data)
-#     else:
-#         response = requests.post(f"{API_URL}/predict")
-#     response.raise_for_status()
-#     print("✅ Predictions generated and saved.")
-#     return response.json()
-
-# def call_evaluate():
-#     response = requests.post(f"{API_URL}/evaluate")
-#     response.raise_for_status()
-#     print("✅ Evaluation complete.")
-#     return response.json()
 
 def get_version_from_alias(model_name: str, alias: str) -> str:
     try:
@@ -106,23 +48,25 @@ def get_first_run_id_by_model_version(model_version, model_name=MODEL_NAME) -> s
         max_results=1
     )  
     if runs.empty:
-        raise ValueError(f"Aucune run trouvée pour model_name=model_name model_version={model_version}")
+        raise ValueError(f"Aucune run trouvée pour model_name={model_name} model_version={model_version}")
     
     return runs.iloc[0].run_id
 
 
-def predict_evaluate_log_run_champion(latest_champion_run_id, model_version):
+def predict_evaluate_log_run_champion(latest_champion_run_id, model_version,
+                                      call_predict_func=predict_func, call_evaluate_func=evaluate_func):
     predictions_filename="predictions_champion.json"
-    
+    model_source = os.path.join(MODELS_DIR,"model_champion.pkl")
     # 1. Prédictions
-    call_predict(latest_champion_run_id, output_filename = predictions_filename)
+    call_predict_func(latest_champion_run_id, output_filename = predictions_filename)
+    call_predict_func(model_source, output_filename = predictions_filename)
     
     # 2. Nouvelle run pour logguer les performances du champion sur le nouveau dataset
     with mlflow.start_run():
         new_run_id = mlflow.active_run().info.run_id
     
         # 3. Évaluation
-        metrics = call_evaluate(run_id=new_run_id, input_filename=predictions_filename)
+        metrics = call_evaluate_func(run_id=new_run_id, input_filename=predictions_filename)
     
         print("\n📊 Recommandation Evaluation Metrics")
         for key, val in metrics.items():
