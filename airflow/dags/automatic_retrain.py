@@ -2,7 +2,6 @@ from airflow import DAG
 from airflow.operators.python import PythonOperator
 from airflow.providers.docker.operators.docker import DockerOperator
 from docker.types import Mount
-# from src.models.check_and_update_model import check_and_update_model
 from datetime import datetime
 import requests
 import json
@@ -62,6 +61,13 @@ with DAG(
     tags=['ml', 'retrain'],
 ) as dag:
 
+    api_task = create_docker_task(
+        task_id='launch_api_task',
+        image='maquirog/api:latest',
+        command="bash -c 'nohup uvicorn src.api.main:app --host 0.0.0.0 --port 8000 > /dev/null 2>&1 &'",
+        network_mode="mlops-net"
+    )
+    
     experiment_task = create_docker_task(
         task_id='run_grid_search_task',
         image='experiment:latest',
@@ -75,4 +81,4 @@ with DAG(
         command="python /app/src/models/check_update_prod_model.py",
     )
 
-    experiment_task >> check_update_task
+    api_task >> experiment_task >> check_update_task
