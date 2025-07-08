@@ -37,8 +37,14 @@ def call_evaluate():
     return response.json()
 
 def main():
+    # Ensure the mlruns/ directory exists at the root of the repository
+    BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
+    mlruns_dir = os.path.join(BASE_DIR, "mlruns")
+    if not os.path.exists(mlruns_dir):
+        os.makedirs(mlruns_dir)
+
     # Define tracking_uri
-    mlflow.set_tracking_uri("http://127.0.0.1:5000")
+    mlflow.set_tracking_uri(f"file://{mlruns_dir}")
     client = MlflowClient()
 
     # Define parameters grid

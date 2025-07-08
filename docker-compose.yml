@@ -65,6 +65,8 @@ services:
     restart: "no"
     environment:
       - HOST_PROJECT_PATH=${HOST_PROJECT_PATH}
+    networks:
+    - mlops-net
 
   evidently:
     <<: *common-service
@@ -100,3 +102,7 @@ services:
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning
       - ./grafana/dashboards:/var/lib/grafana/dashboards
+
+networks:
+  mlops-net:
+    external: true
