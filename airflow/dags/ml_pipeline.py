@@ -12,7 +12,10 @@ default_args = {
 }
 
 HOST_PATH = os.getenv("HOST_PATH")
+if not HOST_PATH:
+    raise Exception("HOST_PATH environment variable is not set")
 
+vol0 = os.path.join(HOST_PATH, 'src')
 vol1 = os.path.join(HOST_PATH, 'data')
 vol2 = os.path.join(HOST_PATH, 'models')
 vol3 = os.path.join(HOST_PATH, 'metrics')
@@ -29,6 +32,7 @@ def create_docker_task(task_id, image, command):
         docker_url='unix://var/run/docker.sock',
         network_mode='bridge',
         mounts=[
+            Mount(source=vol0, target='/app/src', type='bind'),
             Mount(source=vol1, target='/app/data', type='bind'),
             Mount(source=vol2, target='/app/models', type='bind'),
             Mount(source=vol3, target='/app/metrics', type='bind'),
@@ -41,7 +45,6 @@ def create_docker_task(task_id, image, command):
     )
 
 def get_current_week():
-    # Récupère la semaine courante depuis la variable Airflow, default=0
     return int(Variable.get("current_week", default_var=0))
 
 def increment_week():
@@ -99,5 +102,4 @@ with DAG(
         python_callable=increment_week,
     )
 
-    # Dépendances du pipeline
     import_data >> prepare_weekly_dataset >> build_features >> train_model >> predict_model >> evaluate_model >> increment_week_task
