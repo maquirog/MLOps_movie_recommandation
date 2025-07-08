@@ -6,6 +6,7 @@ x-common-service: &common-service
     dockerfile: dockerfiles/Dockerfile
   env_file:
     - .env
+    - .env.local
   volumes:
     - ./src:/app/src
     - ./data:/app/data
@@ -29,8 +30,6 @@ services:
     image: maquirog/prepare_weekly_dataset:latest
     platform: linux/amd64
     command: ["python", "src/data/prepare_weekly_dataset.py", "${CURRENT_WEEK}"]
-    environment:
-      - CURRENT_WEEK=${CURRENT_WEEK}
 
   build_features:
     <<: *common-service
@@ -59,10 +58,6 @@ services:
       - "8000:8000"
     command: ["uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
     restart: "no"
-    environment:
-      - PYTHONPATH=/app
-      - HOST_PROJECT_PATH=${HOST_PROJECT_PATH}
-      - MLFLOW_TRACKING_URI=http://mlflow-server:5050
     depends_on:
       - mlflow-server
 
@@ -98,10 +93,6 @@ services:
   trainer_experiment:
     <<: *common-service
     image: maquirog/trainer_experiment:latest
-    environment:
-      - PYTHONPATH=/app
-      - HOST_PROJECT_PATH=${HOST_PROJECT_PATH}
-      - MLFLOW_TRACKING_URI=http://mlflow-server:5050
     command: ["bash", "src/experiment_trainer/entrypoint.sh"]
     depends_on:
       - mlflow-server
@@ -109,10 +100,6 @@ services:
   champion_selector:
     <<: *common-service
     image: maquirog/champion_selector:latest
-    environment:
-      - PYTHONPATH=/app
-      - HOST_PROJECT_PATH=${HOST_PROJECT_PATH}
-      - MLFLOW_TRACKING_URI=http://mlflow-server:5050
     command: python src/champion_selector/compare_and_promote.py
     depends_on:
       - mlflow-server
