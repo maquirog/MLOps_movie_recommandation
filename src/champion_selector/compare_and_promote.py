@@ -56,9 +56,6 @@ def get_first_run_id_by_model_version(model_version, model_name=MODEL_NAME) -> s
 
 def predict_evaluate_log_run_champion(latest_champion_run_id, model_version,
                                       call_predict_func=predict_func, call_evaluate_func=evaluate_func):
-    predictions_filename="predictions_champion.json"
-    model_source = os.path.join(MODELS_DIR,"model_champion.pkl")
-    
     # Paths
     model_source = os.path.join(MODELS_DIR,"model_champion.pkl")
     predictions_filename="predictions_champion.json"
