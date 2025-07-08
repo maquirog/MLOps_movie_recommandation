@@ -9,15 +9,19 @@ from mlflow.exceptions import MlflowException
 from src.utils.calls import call_train_api, call_predict_api, call_evaluate_api, call_train, call_predict, call_evaluate
 
 # === 🌍 Variables d'environnement === #
-MODEL_NAME = os.environ.get("MODEL_NAME", "movie_recommender")
-MLFLOW_TRACKING_URI = os.environ.get("MLFLOW_TRACKING_URI", "http://mlflow-server:5050")
-BASE_DIR = os.environ.get("BASE_DIR", os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
-DATA_DIR= os.environ.get("DATA_DIR", os.path.join(BASE_DIR, "data"))
-MODELS_DIR = os.environ.get("MODELS_DIR", os.path.join(BASE_DIR, "models"))
-METRIC_KEY = os.environ.get("METRIC_KEY", "ndcg_10")
+BASE_DIR = os.environ.get(
+    "BASE_DIR", 
+    os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+)
 
+DATA_DIR = os.environ.get("DATA_DIR", os.path.join(BASE_DIR, "data"))
+MODELS_DIR = os.environ.get("MODELS_DIR", os.path.join(BASE_DIR, "models"))
 METRICS_DIR = os.environ.get("METRICS_DIR", os.path.join(BASE_DIR, "metrics"))
-PREDICT_DIR = os.path.join(DATA_DIR, "predictions")
+PREDICT_DIR = os.environ.get("PREDICT_DIR", os.path.join(DATA_DIR, "predictions"))
+
+MODEL_NAME = os.environ.get("MODEL_NAME", "movie_recommender")
+METRIC_KEY = os.environ.get("METRIC_KEY", "ndcg_10")
+MLFLOW_TRACKING_URI = os.environ.get("MLFLOW_TRACKING_URI", "http://mlflow-server:5050")
 
 USE_API = True
 

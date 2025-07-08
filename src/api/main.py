@@ -10,86 +10,85 @@ from fastapi import Body
 app = FastAPI()
 router = APIRouter()
 
+BASE_DIR = os.environ.get("HOST_PROJECT_PATH")
+
 # Initialize Docker client
 docker_client = docker.from_env(timeout=300)
 
 def trigger_microservice(service_name: str, command: str = None):
-    try:
-        host_project_path = os.environ.get("HOST_PROJECT_PATH")
-        # Decide how to mount volumes based on environment variable
-        if os.environ.get("VOLUME_MODE", "bind") == "bind":
-            # Use host paths for bind mounts
-            volumes = {
-                os.path.join(host_project_path, "src"): {"bind": "/app/src", "mode": "rw"},
-                os.path.join(host_project_path, "data"): {"bind": "/app/data", "mode": "rw"},
-                os.path.join(host_project_path, "models"): {"bind": "/app/models", "mode": "rw"},
-                os.path.join(host_project_path, "metrics"): {"bind": "/app/metrics", "mode": "rw"},
-                os.path.join(host_project_path, "predictions"): {"bind": "/app/predictions", "mode": "rw"},
-                os.path.join(host_project_path, "reports"): {"bind": "/app/reports", "mode": "rw"},
-                os.path.join(host_project_path, "mlruns"): {"bind": "/app/mlruns", "mode": "rw"},  # 👈 AJOUT ICI
-            }
-            # Debug printout
-            print("Using bind mounts from host for volumes:")
-            for host_path, mount_info in volumes.items():
-                print(f"  Host: {host_path} -> Container: {mount_info['bind']} (mode: {mount_info['mode']})")
-        else:
-            # Use named Docker volumes (for CI/production)
-            volumes = {
-                "shared_src": {"bind": "/app/src", "mode": "rw"},
-                "shared_data": {"bind": "/app/data", "mode": "rw"},
-                "shared_models": {"bind": "/app/models", "mode": "rw"},
-                "shared_metrics": {"bind": "/app/metrics", "mode": "rw"},
-                "shared_predictions": {"bind": "/app/predictions", "mode": "rw"},
-                "shared_reports": {"bind": "/app/reports", "mode": "rw"},
-                "shared_mlruns": {"bind": "/app/mlruns", "mode": "rw"}
-            }
-            print("Using named Docker volumes for volumes:")
-            for vol_name, mount_info in volumes.items():
-                print(f"  Volume: {vol_name} -> Container: {mount_info['bind']} (mode: {mount_info['mode']})")
-
-        # Create and run the container
-        container = docker_client.containers.run(
-            image=f"maquirog/{service_name}:latest",
-            command=command,
-            detach=True,
-            volumes=volumes,
-            working_dir="/app",
-            stdout=True,
-            stderr=True,
-            network="mlops_movie_recommandation_default",
-            environment=[
-                "PYTHONPATH=/app",
-                f"HOST_PROJECT_PATH={os.environ.get('HOST_PROJECT_PATH', '')}",
-                f"MLFLOW_TRACKING_URI={os.environ.get('MLFLOW_TRACKING_URI', '')}",
-                f"MLFLOW_EXPERIMENT_NAME={os.environ.get('MLFLOW_EXPERIMENT_NAME', '')}",
-                f"API_URL={os.environ.get('API_URL', '')}",
-                f"DATA_DIR={os.environ.get('DATA_DIR', '')}",
-                f"MODELS_DIR={os.environ.get('MODELS_DIR', '')}",
-                f"METRICS_DIR={os.environ.get('METRICS_DIR', '')}",
-                f"CHAMPION_PKL_PATH={os.environ.get('CHAMPION_PKL_PATH', '')}",
-                f"MODEL_NAME={os.environ.get('MODEL_NAME', '')}",
-                f"METRIC_KEY={os.environ.get('METRIC_KEY', '')}"
-                ]
-        )
-
-        # Wait for the container to finish
-        logs = container.logs(follow=True)
-        decoded_logs = logs.decode("utf-8")
-        print(f"🚀 Logs for {service_name} microservice:\n{decoded_logs}")
-
-        # Remove the container after it stops
-        container.remove()
-
-        # Beautify the response JSON
-        response = {
-            "status": "success",
-            "message": f"{service_name} microservice completed successfully",
-            "logs": decoded_logs,
+    volume_mode = os.environ.get("VOLUME_MODE", "bind")
+    # Decide how to mount volumes based on environment variable
+    if volume_mode == "bind":
+        # Use host paths for bind mounts
+        volumes = {
+            os.path.join(BASE_DIR, "src"): {"bind": "/app/src", "mode": "rw"},
+            os.path.join(BASE_DIR, "data"): {"bind": "/app/data", "mode": "rw"},
+            os.path.join(BASE_DIR, "models"): {"bind": "/app/models", "mode": "rw"},
+            os.path.join(BASE_DIR, "metrics"): {"bind": "/app/metrics", "mode": "rw"},
+            os.path.join(BASE_DIR, "predictions"): {"bind": "/app/predictions", "mode": "rw"},
+            os.path.join(BASE_DIR, "reports"): {"bind": "/app/reports", "mode": "rw"},
+            os.path.join(BASE_DIR, "mlruns"): {"bind": "/app/mlruns", "mode": "rw"},
         }
-        return JSONResponse(content=json.loads(json.dumps(response, indent=4)))
-    except docker.errors.DockerException as e:
-        print(f"Error while running container: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to trigger {service_name}: {str(e)}")
+        # Debug printout
+        print("Using bind mounts from host for volumes:")
+        for host_path, mount_info in volumes.items():
+            print(f"  Host: {host_path} -> Container: {mount_info['bind']} (mode: {mount_info['mode']})")
+    else:
+        # Use named Docker volumes (for CI/production)
+        volumes = {
+            "shared_src": {"bind": "/app/src", "mode": "rw"},
+            "shared_data": {"bind": "/app/data", "mode": "rw"},
+            "shared_models": {"bind": "/app/models", "mode": "rw"},
+            "shared_metrics": {"bind": "/app/metrics", "mode": "rw"},
+            "shared_predictions": {"bind": "/app/predictions", "mode": "rw"},
+            "shared_reports": {"bind": "/app/reports", "mode": "rw"},
+            "shared_mlruns": {"bind": "/app/mlruns", "mode": "rw"},
+        }
+        print("Using named Docker volumes for volumes:")
+        for vol_name, mount_info in volumes.items():
+            print(f"  Volume: {vol_name} -> Container: {mount_info['bind']} (mode: {mount_info['mode']})")
+
+    env_vars = [
+        f"PYTHONPATH={os.environ.get('PYTHONPATH', '')}",
+        f"MLFLOW_TRACKING_URI={os.environ.get('MLFLOW_TRACKING_URI', '')}",
+        f"MLFLOW_EXPERIMENT_NAME={os.environ.get('MLFLOW_EXPERIMENT_NAME', '')}",
+        f"API_URL={os.environ.get('API_URL', '')}",
+        f"BASE_DIR={os.environ.get('BASE_DIR', '')}",
+        f"DATA_DIR={os.environ.get('DATA_DIR', '')}",
+        f"MODELS_DIR={os.environ.get('MODELS_DIR', '')}",
+        f"METRICS_DIR={os.environ.get('METRICS_DIR', '')}",
+        f"MODEL_NAME={os.environ.get('MODEL_NAME', '')}",
+        f"METRIC_KEY={os.environ.get('METRIC_KEY', '')}"
+    ]
+    # Create and run the container
+    container = docker_client.containers.run(
+        image=f"maquirog/{service_name}:latest",
+        command=command,
+        detach=True,
+        volumes=volumes,
+        working_dir="/app",
+        stdout=True,
+        stderr=True,
+        network="mlops_movie_recommandation_default",
+        environment=env_vars
+    )
+
+    # Wait for the container to finish
+    logs = container.logs(follow=True)
+    decoded_logs = logs.decode("utf-8")
+    print(f"🚀 Logs for {service_name} microservice:\n{decoded_logs}")
+
+    # Remove the container after it stops
+    container.remove()
+
+    # Beautify the response JSON
+    response = {
+        "status": "success",
+        "message": f"{service_name} microservice completed successfully",
+        "logs": decoded_logs,
+    }
+    return JSONResponse(content=json.loads(json.dumps(response, indent=4)))
+
 
 # Health check endpoint
 @app.get("/health")

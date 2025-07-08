@@ -90,6 +90,6 @@ target/
 # Mlruns
 mlruns/
 
-metrics/
 /models
 
+.env.local
