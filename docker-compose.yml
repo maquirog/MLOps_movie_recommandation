@@ -6,7 +6,7 @@ x-common-service: &common-service
     dockerfile: dockerfiles/Dockerfile
   env_file:
     - .env
-    - .env.local
+    - ${LOCAL_ENV_FILE:-.env.local}
   volumes:
     - ./src:/app/src
     - ./data:/app/data
