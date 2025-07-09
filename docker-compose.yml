@@ -167,3 +167,6 @@ services:
 
 volumes:
   mysql-data:
+networks:
+  mlops-net:
+    external: true

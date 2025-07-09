@@ -8,3 +8,5 @@ requests
 docker
 evidently==0.6.7
 mlflow
+dvc[s3]
+python-dotenv
