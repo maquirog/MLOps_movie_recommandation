@@ -17,6 +17,8 @@ x-common-service: &common-service
     - ./mlruns:/app/mlruns
   working_dir: /app
   restart: "no"
+  networks:
+  - mlops-net
 
 services:
   import_raw_data:
@@ -73,6 +75,8 @@ services:
     volumes:
       - mysql-data:/var/lib/mysql
     restart: unless-stopped
+    networks:
+    - mlops-net
 
   mlflow-server:
     <<: *common-service
@@ -134,6 +138,8 @@ services:
       - mysql
     environment:
       MYSQL_PWD: mlflow_password
+    networks:
+    - mlops-net
 
 
 
@@ -153,6 +159,8 @@ services:
       - "9090:9090"
     depends_on:
       - api
+    networks:
+    - mlops-net
     
   grafana:
     image: grafana/grafana:latest
@@ -164,6 +172,8 @@ services:
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning
       - ./grafana/dashboards:/var/lib/grafana/dashboards
+    networks:
+    - mlops-net
 
 volumes:
   mysql-data:
