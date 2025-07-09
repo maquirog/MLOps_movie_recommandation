@@ -69,7 +69,7 @@ def trigger_microservice(service_name: str, command: str = None):
         working_dir="/app",
         stdout=True,
         stderr=True,
-        network="mlops-net",
+        network="mlops-net", # ou mlops_movie_recommandation ?
         environment=env_vars
     )
 
