@@ -57,7 +57,7 @@ docs/_build/
 target/
 
 # DotEnv configuration
-# .env
+.env.local
 
 # Database
 *.db
@@ -90,6 +90,11 @@ target/
 # Mlruns
 mlruns/
 
-/models
+# Models
+/models/*
+!/models/*.dvc
 
-.env.local
+# Metrics
+metrics/*
+!metrics/champion_scores.json
+

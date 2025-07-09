@@ -2,6 +2,7 @@ import os
 import mlflow
 import pickle
 import json
+import subprocess
 from mlflow.tracking import MlflowClient
 from src.utils.calls import  call_predict_api, call_evaluate_api, call_predict, call_evaluate
 
@@ -124,14 +125,29 @@ def export_champion_model_as_pkl(model_name, champion_version, output_dir=MODELS
 
     print(f"Modèle exporté en pickle à : {output_path}")
 
-def promote_challenger_to_champ(version):
-        # Le challenger devient champion
-        client.set_registered_model_alias(name=MODEL_NAME, alias="champion", version=version)
-        # Supprimer alias challenger
-        client.delete_registered_model_alias(name=MODEL_NAME, alias="challenger")
-        #Sauvegarder le nouveau champion
-        print("Print save .pkl localy")
-        export_champion_model_as_pkl(MODEL_NAME, challenger_version)
+def promote_challenger_to_champ(new_champ_version):
+    # Update Alias MLFLow
+    client.set_registered_model_alias(name=MODEL_NAME, alias="champion", version=new_champ_version)
+    client.delete_registered_model_alias(name=MODEL_NAME, alias="challenger")
+    
+    #Sauvegarder le nouveau champion
+    print("Print save .pkl localy")
+    export_champion_model_as_pkl(MODEL_NAME, new_champ_version)
+    
+    # DVC add + Git add
+    metrics_path = os.path.join(METRICS_DIR, "champion_scores.json")
+    print("Ajout des fichiers au suivi DVC et Git...")
+
+    model_dvc_file = "models/model_champion.pkl.dvc"
+    subprocess.run(["dvc", "add", "models/model_champion.pkl"], check=True)
+    subprocess.run(["git", "add", model_dvc_file, metrics_path], check=True)
+    subprocess.run(["git", "commit", "-m", "Promote new champion model and metrics"], check=True)
+    
+    print("Push DVC et Git...")
+    subprocess.run(["dvc", "push"], check=True)
+    subprocess.run(["git", "push", "origin", "HEAD"], check=True)
+
+    print("Promotion effectuée avec versionnement DVC/Git.")
 
 if __name__ == "__main__":
     client = MlflowClient()
@@ -145,7 +161,7 @@ if __name__ == "__main__":
         exit(1)
     elif champion_version is None:
         print("Pas de champion : promouvoir challenger en champion")
-        promote_challenger_to_champ(challenger_version)
+        promote_challenger_to_champ(new_champ_version=challenger_version)
     else:
         print("Model challenger et champion trouvés, début de la comparaison...")
         # Lancer une run du champion sur le nouveau dataset
@@ -159,7 +175,7 @@ if __name__ == "__main__":
         # Compare les métriques (exemple sur ndcg_10)
         if compare_metrics_mlflow(challenger_run_id, new_run_id_champ, metric_key=METRIC_KEY):
             print("Promouvoir challenger en champion, champion déprécié")
-            promote_challenger_to_champ(challenger_version)
+            promote_challenger_to_champ(new_champ_version=challenger_version)
         else:
             print("Champion reste, challenger déprécié")
             # Supprime l'alias challenger (ou fait ce que tu veux)
