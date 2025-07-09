@@ -6,8 +6,9 @@ WORKDIR /app
 
 # Installer git et curl
 RUN apt-get update && \
-    rm -rf /var/lib/apt/lists/* && \
-    apt-get install -y git curl gcc libffi-dev libssl-dev
+    apt-get install -y git curl gcc libffi-dev libssl-dev && \
+    rm -rf /var/lib/apt/lists/* 
+
 
 # Installer les dépendances Python
 COPY ./requirements/requirements.txt /app/requirements.txt

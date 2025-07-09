@@ -76,6 +76,8 @@ target/
 .ipynb_checkpoints/
 
 # exclude data from source control by default
+/data/
+!/data/*.dvc
 
 # Mac OS-specific storage files
 .DS_Store
@@ -95,6 +97,6 @@ mlruns/
 !/models/*.dvc
 
 # Metrics
-metrics/*
-!metrics/champion_scores.json
+/metrics/*
+!/metrics/champion_scores.json
 
