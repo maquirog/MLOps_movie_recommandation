@@ -154,6 +154,10 @@ def promote_challenger_to_champ(new_champ_version):
     client.set_registered_model_alias(name=MODEL_NAME, alias="champion", version=new_champ_version)
     client.delete_registered_model_alias(name=MODEL_NAME, alias="challenger")
     
+    AWS_ACCESS_KEY_ID=os.environ.get("AWS_ACCESS_KEY_ID")
+    print("AWS_ACCESS_KEY_ID:",AWS_ACCESS_KEY_ID)
+    print()
+    
     # Update fichier locaux
     print("Save champion_model.pkl localy from registry MLflow")
     export_champion_model_as_pkl(MODEL_NAME, new_champ_version)

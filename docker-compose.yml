@@ -15,7 +15,6 @@ x-common-service: &common-service
     - ./reports:/app/reports
     - "/var/run/docker.sock:/var/run/docker.sock"
     - ./mlruns:/app/mlruns
-    - ./.dvc:/app/dvc
   working_dir: /app
   restart: "no"
   networks:
@@ -24,6 +23,7 @@ x-common-service: &common-service
 x-git-service: &git-service
   volumes:
     - ./.git:/app/.git
+    - ./.dvc:/app/.dvc
 
 services:
   import_raw_data:

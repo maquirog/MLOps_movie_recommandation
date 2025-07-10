@@ -2,6 +2,7 @@ import json  # For formatting JSON responses
 from fastapi import FastAPI, APIRouter, HTTPException, Response
 from fastapi.responses import JSONResponse  # For custom JSON responses
 from src.api.models import TrainRequest, PredictionRequest, EvaluateRequest, TrainerExperimentRequest
+from dotenv import dotenv_values
 import docker
 import os
 from fastapi import Body
@@ -69,7 +70,9 @@ def trigger_microservice(service_name: str, command: str = None):
         env_vars += [
             f"GITHUB_USERNAME={os.environ.get('GITHUB_USERNAME', '')}",
             f"GITHUB_EMAIL={os.environ.get('GITHUB_EMAIL', '')}",
-            f"GITHUB_TOKEN={os.environ.get('GITHUB_TOKEN', '')}"
+            f"GITHUB_TOKEN={os.environ.get('GITHUB_TOKEN', '')}",
+            f"AWS_ACCESS_KEY_ID={os.environ.get('AWS_ACCESS_KEY_ID', '')}",
+            f"AWS_SECRET_ACCESS_KEY={os.environ.get('AWS_SECRET_ACCESS_KEY', '')}"
         ]
         
     # Create and run the container
