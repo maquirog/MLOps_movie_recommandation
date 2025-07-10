@@ -10,12 +10,12 @@ default_args = {
     'owner': 'airflow',
     'retries': 1,
 }
-
 API_URL = os.environ.get("API_URL")
-if not API_URL:
-    raise ValueError("La variable d'environnement API_URL n'est pas définie.")
 
 def wait_for_api():
+    if not API_URL:
+        raise AirflowSkipException("API_URL not set in environment")
+    
     url = f"{API_URL}/health"  # ou un endpoint simple qui répond vite
     max_retries = 10
     wait_seconds = 5
@@ -32,7 +32,7 @@ def wait_for_api():
     raise AirflowSkipException("API is not available after retries")
 
 def call_trainer_expirement_api():
-    response = requests.post(f"{API_URL}/trainer_expirement")
+    response = requests.post(f"{API_URL}/trainer_experiment", json={})
     if response.status_code != 200:
         raise Exception(f"Training failed: {response.text}")
 
@@ -59,12 +59,12 @@ with DAG(
     )
     
     trainer_experiment_task = PythonOperator(
-        task_id='train_model',
+        task_id='launch_weekly_experiment_mlflow',
         python_callable=call_trainer_expirement_api,
     )
 
     compare_and_promote_task = PythonOperator(
-        task_id='promote_model',
+        task_id='compare_and_promote_task',
         python_callable=call_run_champion_selector_api,
     )
 
