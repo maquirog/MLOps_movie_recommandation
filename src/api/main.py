@@ -27,7 +27,7 @@ def trigger_microservice(service_name: str, command: str = None):
             os.path.join(BASE_DIR, "metrics"): {"bind": "/app/metrics", "mode": "rw"},
             os.path.join(BASE_DIR, "predictions"): {"bind": "/app/predictions", "mode": "rw"},
             os.path.join(BASE_DIR, "reports"): {"bind": "/app/reports", "mode": "rw"},
-            os.path.join(BASE_DIR, "mlruns"): {"bind": "/app/mlruns", "mode": "rw"},
+            os.path.join(BASE_DIR, "mlruns"): {"bind": "/app/mlruns", "mode": "rw"}
         }
         # Debug printout
         print("Using bind mounts from host for volumes:")
@@ -43,6 +43,7 @@ def trigger_microservice(service_name: str, command: str = None):
             "shared_predictions": {"bind": "/app/predictions", "mode": "rw"},
             "shared_reports": {"bind": "/app/reports", "mode": "rw"},
             "shared_mlruns": {"bind": "/app/mlruns", "mode": "rw"},
+            "shared_dvc": {"bind": "/app/.dvc", "mode": "rw"}
         }
         print("Using named Docker volumes for volumes:")
         for vol_name, mount_info in volumes.items():
@@ -58,8 +59,19 @@ def trigger_microservice(service_name: str, command: str = None):
         f"MODELS_DIR={os.environ.get('MODELS_DIR', '')}",
         f"METRICS_DIR={os.environ.get('METRICS_DIR', '')}",
         f"MODEL_NAME={os.environ.get('MODEL_NAME', '')}",
-        f"METRIC_KEY={os.environ.get('METRIC_KEY', '')}"
+        f"METRIC_KEY={os.environ.get('METRIC_KEY', '')}",
     ]
+    if service_name == "champion_selector":
+        volumes.update({
+            os.path.join(BASE_DIR, ".dvc"): {"bind": "/app/.dvc", "mode": "rw"},
+            os.path.join(BASE_DIR, ".git"): {"bind": "/app/.git", "mode": "rw"}
+        })
+        env_vars += [
+            f"GITHUB_USERNAME={os.environ.get('GITHUB_USERNAME', '')}",
+            f"GITHUB_EMAIL={os.environ.get('GITHUB_EMAIL', '')}",
+            f"GITHUB_TOKEN={os.environ.get('GITHUB_TOKEN', '')}"
+        ]
+        
     # Create and run the container
     container = docker_client.containers.run(
         image=f"maquirog/{service_name}:latest",
@@ -77,10 +89,25 @@ def trigger_microservice(service_name: str, command: str = None):
     logs = container.logs(follow=True)
     decoded_logs = logs.decode("utf-8")
     print(f"🚀 Logs for {service_name} microservice:\n{decoded_logs}")
+    
+    result = container.wait()  # Attend la fin et récupère le code de sortie
+    exit_code = result.get("StatusCode", 1)
 
     # Remove the container after it stops
     container.remove()
 
+    
+    if exit_code != 0:
+        # Ici tu peux lever une exception HTTP pour que FastAPI renvoie 500
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "status": "error",
+                "message": f"{service_name} microservice failed with exit code {exit_code}",
+                "logs": decoded_logs,
+            }
+        )
+        
     # Beautify the response JSON
     response = {
         "status": "success",

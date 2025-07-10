@@ -1,55 +1,47 @@
 from airflow import DAG
 from airflow.operators.python import PythonOperator
-from airflow.providers.docker.operators.docker import DockerOperator
-from docker.types import Mount
-from datetime import datetime
-import requests
-import json
+from airflow.exceptions import AirflowSkipException
 import os
-import subprocess
-import yaml
-from pathlib import Path
+import requests
+import time
+from datetime import datetime
 
 default_args = {
     'owner': 'airflow',
     'retries': 1,
 }
 
-HOST_PATH = os.getenv("HOST_PATH")
+API_URL = os.environ.get("API_URL")
+if not API_URL:
+    raise ValueError("La variable d'environnement API_URL n'est pas définie.")
 
-# Subclass DockerOperator to avoid command templating
-class NoTemplateDockerOperator(DockerOperator):
-    template_fields = tuple(f for f in DockerOperator.template_fields if f != "command")
+def wait_for_api():
+    url = f"{API_URL}/health"  # ou un endpoint simple qui répond vite
+    max_retries = 10
+    wait_seconds = 5
+    for i in range(max_retries):
+        try:
+            r = requests.get(url)
+            if r.status_code == 200:
+                print("API is available!")
+                return
+        except Exception:
+            pass
+        print(f"API not available yet, retrying {i+1}/{max_retries}...")
+        time.sleep(wait_seconds)
+    raise AirflowSkipException("API is not available after retries")
 
-# Fonction pour créer un DockerOperator
-def create_docker_task(task_id, image, command, network_mode='bridge'):
-    return NoTemplateDockerOperator(
-        task_id=task_id,
-        image=image,
-        command=command,
-        auto_remove=True,
-        docker_url='unix://var/run/docker.sock',
-        network_mode=network_mode,
-        working_dir='/app',
-        environment={
-            "PYTHONPATH": "/app",
-            "HOST_PROJECT_PATH": HOST_PATH
-        },
-        mounts=[
-            Mount(source=os.path.join(HOST_PATH, 'src'), target='/app/src', type='bind'),
-            Mount(source=os.path.join(HOST_PATH, 'mlruns'), target='/app/mlruns', type='bind'),
-            Mount(source=os.path.join(HOST_PATH, 'models'), target='/app/models', type='bind'),
-            Mount(source=os.path.join(HOST_PATH, 'metrics'), target='/app/metrics', type='bind'),
-            Mount(source=os.path.join(HOST_PATH, '.git'), target='/app/.git', type='bind'),
-            Mount(source=os.path.join(HOST_PATH, '.dvc'), target='/app/.dvc', type='bind'),
-            Mount(source=os.path.join(HOST_PATH, '.env'), target='/app/.env', type='bind'),
-            Mount(source=os.path.join(HOST_PATH, 'airflow/dags'), target='/opt/airflow/dags', type='bind'),
-            Mount(source=os.path.join(HOST_PATH, 'airflow/logs'), target='/opt/airflow/logs', type='bind'),
-            Mount(source=os.path.join(HOST_PATH, 'airflow/plugins'), target='/opt/airflow/plugins', type='bind'),
-            Mount(source='/var/run/docker.sock', target='/var/run/docker.sock', type='bind'),
-        ],
-        force_pull=False,
-    )
+def call_trainer_expirement_api():
+    response = requests.post(f"{API_URL}/trainer_expirement")
+    if response.status_code != 200:
+        raise Exception(f"Training failed: {response.text}")
+
+def call_run_champion_selector_api():
+    response = requests.post(f"{API_URL}/run_champion_selector")
+    if response.status_code != 200:
+        raise Exception(f"Promotion failed: {response.text}")
+
+
 
 with DAG(
     dag_id="automatic_retrain",
@@ -61,25 +53,19 @@ with DAG(
     tags=['ml', 'retrain'],
 ) as dag:
 
-    #api_task = create_docker_task(
-    #    task_id='launch_api_task',
-    #    image='maquirog/api:latest',
-    #    command="bash -c 'nohup uvicorn src.api.main:app --host 0.0.0.0 --port 8000 > /dev/null 2>&1 &'",
-    #    network_mode="mlops-net"
-    #)
+    api_available_task = PythonOperator(
+        task_id='wait_for_api',
+        python_callable=wait_for_api
+    )
     
-    experiment_task = create_docker_task(
-        task_id='run_grid_search_task',
-        image='experiment:latest',
-        command="bash /app/src/experiment/entrypoint.sh",
-        network_mode="mlops-net"
+    trainer_experiment_task = PythonOperator(
+        task_id='train_model',
+        python_callable=call_trainer_expirement_api,
     )
 
-    check_update_task = create_docker_task(
-        task_id='run_check_update_prod_model_task',
-        image='check_update_prod_model:latest',
-        command="python /app/src/models/check_update_prod_model.py",
+    compare_and_promote_task = PythonOperator(
+        task_id='promote_model',
+        python_callable=call_run_champion_selector_api,
     )
 
-    #api_task >> experiment_task >> check_update_task
-    experiment_task >> check_update_task
+    api_available_task >> trainer_experiment_task >> compare_and_promote_task
