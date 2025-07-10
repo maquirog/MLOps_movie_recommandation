@@ -2,7 +2,6 @@ import json  # For formatting JSON responses
 from fastapi import FastAPI, APIRouter, HTTPException, Response
 from fastapi.responses import JSONResponse  # For custom JSON responses
 from src.api.models import TrainRequest, PredictionRequest, EvaluateRequest, TrainerExperimentRequest
-from dotenv import dotenv_values
 import docker
 import os
 from fastapi import Body
@@ -130,13 +129,17 @@ def health_check():
 def import_raw_data():
     return trigger_microservice("import_raw_data", command="python src/data/import_raw_data.py")
 
+@router.post("/prepare_weekly_dataset")
+def prepare_weekly_dataset(payload: dict):
+    current_week = payload.get("current_week")
+    if current_week is None:
+        raise HTTPException(status_code=400, detail="Missing current_week parameter")
+    command = f"python src/data/prepare_weekly_dataset.py {current_week}"
+    return trigger_microservice("prepare_weekly_dataset", command=command)
+
 @router.post("/build_features")
 def build_features():
     return trigger_microservice("build_features", command="python src/data/build_features.py")
-
-#@router.post("/train")
-#def train_model():
-#    return trigger_microservice("train", command="python src/models/train.py")
 
 
 # Training endpoint
