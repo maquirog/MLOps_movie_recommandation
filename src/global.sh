@@ -7,3 +7,4 @@ docker-compose up build_features
 # lancer api
 docker-compose up api
 # lancer airflow
+docker-compose --env-file .env.local -f docker-compose.airflow.yml up
