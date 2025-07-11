@@ -23,7 +23,7 @@ fi
 
 # Étape 3: Lancement des services nécessaires
 echo "🚀 Lancement des services de base..."
-docker-compose up \
+docker-compose up -d \
     import_raw_data \
     api \
     mysql \
