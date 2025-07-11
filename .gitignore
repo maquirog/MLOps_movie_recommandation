@@ -100,3 +100,5 @@ mlruns/
 /metrics/*
 !/metrics/champion_scores.json
 
+# predictions
+/predictions
