@@ -10,6 +10,7 @@ from datetime import datetime
 default_args = {
     'owner': 'airflow',
     'retries': 1,
+    'depends_on_past': False,
 }
 API_URL = os.environ.get("API_URL")
 
@@ -46,7 +47,7 @@ def call_build_features():
         raise Exception(f"Training failed: {response.text}")
 
 def call_trainer_experiment_api():
-    response = requests.post(f"{API_URL}/trainer_experiment", json={"experiment_name":f"week {current_week}"})
+    response = requests.post(f"{API_URL}/trainer_experiment", json={})
     if response.status_code != 200:
         raise Exception(f"Training failed: {response.text}")
 
@@ -63,10 +64,11 @@ with DAG(
     dag_id="automatic_retrain",
     default_args=default_args,
     description="Auto retrain if new model is better",
-    schedule_interval="@weekly",
+    schedule_interval=None,   #@weekly
     start_date=datetime(2024, 1, 1),
     catchup=False,
     tags=['ml', 'retrain'],
+    max_active_runs=1,
 ) as dag:
 
     api_available_task = PythonOperator(
