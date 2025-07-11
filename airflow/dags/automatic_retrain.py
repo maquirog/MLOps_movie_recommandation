@@ -49,7 +49,7 @@ def call_build_features():
 
 def call_trainer_experiment_api():
     current_week = str(Variable.get("current_week", default_var=0))
-    response = requests.post(f"{API_URL}/trainer_experiment", json={"experiment_name": "string",})
+    response = requests.post(f"{API_URL}/trainer_experiment", json={"experiment_name": f"week_{current_week}"})
     if response.status_code != 200:
         raise Exception(f"Training failed: {response.text}")
 
@@ -103,5 +103,4 @@ with DAG(
         python_callable=increment_week,
     )
 
-    # api_available_task >> trainer_experiment_task >> compare_and_promote_task >> increment_week_task
     api_available_task >> prepare_weekly_dataset >> build_features >> trainer_experiment_task >> compare_and_promote_task >> increment_week_task

@@ -29,18 +29,19 @@ services:
 #### === INITIALISE DATAS === ###
   import_raw_data:
     <<: *common-service
-    image: maquirog/import_raw_data:latest
+    image: maquirog/mlops_movie_recommandation:latest
+    container_name: mlops-import_raw_data
     platform: linux/amd64
     command: ["python", "src/data/import_raw_data.py"]
 
 #### === PERMANENT SERVICES === ###
   api:
     <<: *common-service
-    image: maquirog/api:latest
+    image: maquirog/mlops_movie_recommandation:latest
+    container_name: mlops-api
     ports:
       - "8000:8000"
     command: ["uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
-    restart: "no"
     depends_on:
       - mlflow-server
 
@@ -61,7 +62,8 @@ services:
 
   mlflow-server:
     <<: *common-service
-    image: maquirog/mlflow-server:latest
+    image: maquirog/mlops_movie_recommandation:latest
+    container_name: mlops-mlflow_server
     command: >
       mlflow server
       --host 0.0.0.0
@@ -77,7 +79,8 @@ services:
 
   evidently:
     <<: *common-service
-    image: maquirog/evidently:latest
+    image: maquirog/mlops_movie_recommandation:latest
+    container_name: mlops-evidently
     command: ["bash", "-c", "python evidently/simulate_drift.py && python evidently/run_evidently_report.py"]
 
   prometheus:
@@ -110,25 +113,29 @@ services:
 ### === API CALLS (TO BUILD IMAGE ONLY) === ###
   prepare_weekly_dataset:
     <<: *common-service
-    image: maquirog/prepare_weekly_dataset:latest
+    image: maquirog/mlops_movie_recommandation:latest
+    container_name: mlops-prepare_weekly_dataset
     platform: linux/amd64
     command: ["python", "src/data/prepare_weekly_dataset.py", "${CURRENT_WEEK}"]
 
   build_features:
     <<: *common-service
-    image: maquirog/build_features:latest
+    image: maquirog/mlops_movie_recommandation:latest
+    container_name: mlops-build_features
     command: ["python", "src/data/build_features.py"]
 
   trainer_experiment:
     <<: *common-service
-    image: maquirog/trainer_experiment:latest
+    image: maquirog/mlops_movie_recommandation:latest
+    container_name: mlops-trainer-experiment
     command: ["bash", "src/models/entrypoint_experiments.sh"]
     depends_on:
       - mlflow-server
 
   champion_selector:
     <<: [*common-service, *git-service]
-    image: maquirog/champion_selector:latest
+    image: maquirog/mlops_movie_recommandation:latest
+    container_name: mlops-champion_selector
     command: python src/models/compare_and_promote.py
     depends_on:
       - mlflow-server
