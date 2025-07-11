@@ -48,8 +48,8 @@ def call_build_features():
         raise Exception(f"Training failed: {response.text}")
 
 def call_trainer_experiment_api():
-    current_week = int(Variable.get("current_week", default_var=0))
-    response = requests.post(f"{API_URL}/trainer_experiment", json={"experiment_name": current_week})
+    current_week = str(Variable.get("current_week", default_var=0))
+    response = requests.post(f"{API_URL}/trainer_experiment", json={"experiment_name": "string",})
     if response.status_code != 200:
         raise Exception(f"Training failed: {response.text}")
 
