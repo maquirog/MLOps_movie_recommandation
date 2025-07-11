@@ -21,7 +21,11 @@ else
     echo "✅ Réseau ${NETWORK_NAME} déjà existant."
 fi
 
-# Étape 3: Lancement des services nécessaires
+# Étape 3: Création des images
+echo "🔩 Lancement des services de base..."
+docker-compose build
+
+# Étape 4: Lancement des services nécessaires
 echo "🚀 Lancement des services de base..."
 docker-compose up -d \
     import_raw_data \

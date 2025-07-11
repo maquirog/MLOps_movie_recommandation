@@ -26,24 +26,14 @@ x-git-service: &git-service
     - ./.dvc:/app/.dvc
 
 services:
+#### === INITIALISE DATAS === ###
   import_raw_data:
     <<: *common-service
     image: maquirog/import_raw_data:latest
     platform: linux/amd64
     command: ["python", "src/data/import_raw_data.py"]
 
-  prepare_weekly_dataset:
-    <<: *common-service
-    image: maquirog/prepare_weekly_dataset:latest
-    platform: linux/amd64
-    command: ["python", "src/data/prepare_weekly_dataset.py", "${CURRENT_WEEK}"]
-
-  build_features:
-    <<: *common-service
-    image: maquirog/build_features:latest
-    command: ["python", "src/data/build_features.py"]
-
-
+#### === PERMANENT SERVICES === ###
   api:
     <<: *common-service
     image: maquirog/api:latest
@@ -85,55 +75,6 @@ services:
       - mysql
     restart: unless-stopped
 
-  trainer_experiment:
-    <<: *common-service
-    image: maquirog/trainer_experiment:latest
-    command: ["bash", "src/experiment_trainer/entrypoint.sh"]
-    depends_on:
-      - mlflow-server
-
-  champion_selector:
-    <<: [*common-service, *git-service]
-    image: maquirog/champion_selector:latest
-    command: python src/champion_selector/compare_and_promote.py
-    depends_on:
-      - mlflow-server
-  
-  reset-mlflow:
-    image: mysql:8.0
-    entrypoint: ["/bin/bash", "-c"]
-    command: >
-      "
-      echo '📦 Suppression des données MySQL...' &&
-      mysql -h mysql -umlflow_user -pmlflow_password mlflow -e \"
-        DELETE FROM logged_model_params;
-        DELETE FROM logged_model_metrics;
-        DELETE FROM logged_model_tags;
-        DELETE FROM latest_metrics;
-        DELETE FROM metrics;
-        DELETE FROM params;
-        DELETE FROM tags;
-        DELETE FROM runs;
-        DELETE FROM model_version_tags;
-        DELETE FROM model_versions;
-        DELETE FROM registered_models;
-        DELETE FROM experiments WHERE experiment_id != 0;
-      \" &&
-      echo '🧨 Suppression des artefacts...' &&
-      rm -rf /app/mlruns/* &&
-      echo '✅ Réinitialisation MLflow terminée.'
-      "
-    volumes:
-      - ./mlruns:/app/mlruns
-    depends_on:
-      - mysql
-    environment:
-      MYSQL_PWD: mlflow_password
-    networks:
-    - mlops-net
-
-
-
   evidently:
     <<: *common-service
     image: maquirog/evidently:latest
@@ -166,8 +107,37 @@ services:
     networks:
     - mlops-net
 
+### === API CALLS TO BUILD IMAGE ONLY === ###
+  prepare_weekly_dataset:
+    <<: *common-service
+    image: maquirog/prepare_weekly_dataset:latest
+    platform: linux/amd64
+    command: ["python", "src/data/prepare_weekly_dataset.py", "${CURRENT_WEEK}"]
+
+  build_features:
+    <<: *common-service
+    image: maquirog/build_features:latest
+    command: ["python", "src/data/build_features.py"]
+
+  trainer_experiment:
+    <<: *common-service
+    image: maquirog/trainer_experiment:latest
+    command: ["bash", "src/experiment_trainer/entrypoint.sh"]
+    depends_on:
+      - mlflow-server
+
+  champion_selector:
+    <<: [*common-service, *git-service]
+    image: maquirog/champion_selector:latest
+    command: python src/champion_selector/compare_and_promote.py
+    depends_on:
+      - mlflow-server
+
+
+### === VOLUMES & NETWORKS === ###
 volumes:
   mysql-data:
+
 networks:
   mlops-net:
     external: true
