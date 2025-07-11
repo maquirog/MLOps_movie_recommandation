@@ -18,8 +18,9 @@ x-airflow-common: &airflow-common
     AIRFLOW__SMTP__SMTP_PASSWORD: "cfsrvkongsobheta"
     AIRFLOW__SMTP__SMTP_MAIL_FROM: "de.airflow@gmail.com"
     DOCKER_GID: "${DOCKER_GID}"
-    HOST_PATH: "${HOST_PATH}"
+    HOST_PATH: "${HOST_PROJECT_PATH}"
     _PIP_ADDITIONAL_REQUIREMENTS: ${_PIP_ADDITIONAL_REQUIREMENTS:- pymongo}
+    API_URL: "${API_URL}"
   volumes:
     - ./airflow/dags:/opt/airflow/dags
     - ./airflow/logs:/opt/airflow/logs
@@ -48,6 +49,8 @@ services:
       interval: 5s
       retries: 5
     restart: always
+    networks:
+    - mlops-net
 
   redis:
     image: redis:latest
@@ -59,6 +62,8 @@ services:
       timeout: 30s
       retries: 50
     restart: always
+    networks:
+    - mlops-net
 
   airflow-webserver:
     <<: *airflow-common
@@ -71,6 +76,8 @@ services:
       timeout: 10s
       retries: 5
     restart: always
+    networks:
+    - mlops-net
 
   airflow-scheduler:
     <<: *airflow-common
@@ -85,6 +92,8 @@ services:
       timeout: 10s
       retries: 5
     restart: always
+    networks:
+    - mlops-net
 
   airflow-worker:
     <<: *airflow-common
@@ -97,6 +106,8 @@ services:
       timeout: 10s
       retries: 5
     restart: always
+    networks:
+    - mlops-net
 
   airflow-init:
     <<: *airflow-common
@@ -107,6 +118,8 @@ services:
       _AIRFLOW_WWW_USER_CREATE: "true"
       _AIRFLOW_WWW_USER_USERNAME: ${_AIRFLOW_WWW_USER_USERNAME:-airflow}
       _AIRFLOW_WWW_USER_PASSWORD: ${_AIRFLOW_WWW_USER_PASSWORD:-airflow}
+    networks:
+    - mlops-net
 
   flower:
     <<: *airflow-common
@@ -119,7 +132,13 @@ services:
       timeout: 10s
       retries: 5
     restart: always
+    networks:
+    - mlops-net
 
 # Déclaration des volumes
 volumes:
   airflow-postgres-db-volume:
+
+networks:
+  mlops-net:
+    external: true

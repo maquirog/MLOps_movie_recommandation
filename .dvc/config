@@ -3,3 +3,6 @@
 ['remote "origin"']
     url = s3://dvc
     endpointurl = https://dagshub.com/maquirog/MLOps_movie_recommandation.s3
+# ['remote "origin"']
+#     url = s3://dvc
+#     endpointurl = https://dagshub.com/maquirog/MLOps_movie_recommandation.s3

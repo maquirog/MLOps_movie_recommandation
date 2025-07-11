@@ -4,16 +4,15 @@ FROM python:3.10-slim
 # Définir le répertoire de travail à l'intérieur du conteneur
 WORKDIR /app
 
-# Copier les fichiers nécessaires pour tous les services
-COPY ./src /app/src
-COPY ./data /app/data
-COPY ./evidently /app/evidently
-COPY ./models /app/models
-COPY ./metrics /app/metrics
+# Installer git et curl
+RUN apt-get update && \
+    apt-get install -y git curl gcc libffi-dev libssl-dev && \
+    rm -rf /var/lib/apt/lists/* 
 
+
+# Installer les dépendances Python
 COPY ./requirements/requirements.txt /app/requirements.txt
-
-# Installer les dépendances
 RUN pip install --no-cache-dir -r /app/requirements.txt
+
 
 CMD ["python", "main.py"]

@@ -4,64 +4,36 @@ x-common-service: &common-service
   build:
     context: .
     dockerfile: dockerfiles/Dockerfile
+  env_file:
+    - .env
+    - ${LOCAL_ENV_FILE:-.env.local}
   volumes:
     - ./src:/app/src
     - ./data:/app/data
     - ./models:/app/models
     - ./metrics:/app/metrics
     - ./reports:/app/reports
-    - ./evidently/workspace:/app/evidently/workspace
     - "/var/run/docker.sock:/var/run/docker.sock"
+    - ./mlruns:/app/mlruns
   working_dir: /app
   restart: "no"
+  networks:
+  - mlops-net
+
+x-git-service: &git-service
+  volumes:
+    - ./.git:/app/.git
+    - ./.dvc:/app/.dvc
 
 services:
+#### === INITIALISE DATAS === ###
   import_raw_data:
     <<: *common-service
     image: maquirog/import_raw_data:latest
+    platform: linux/amd64
     command: ["python", "src/data/import_raw_data.py"]
 
-  prepare_weekly_dataset:
-    <<: *common-service
-    image: maquirog/prepare_weekly_dataset:latest
-    command: ["python", "src/data/prepare_weekly_dataset.py", "${CURRENT_WEEK}"]
-    environment:
-      - CURRENT_WEEK=${CURRENT_WEEK}
-
-  build_features:
-    <<: *common-service
-    image: maquirog/build_features:latest
-    command: ["python", "src/data/build_features.py"]
-
-  train:
-    <<: *common-service
-    image: maquirog/train:latest
-    command: ["python", "src/models/train.py"]
-
-  predict:
-    <<: *common-service
-    image: maquirog/predict:latest
-    command: ["python", "src/models/predict.py"]
-
-  evaluate:
-    <<: *common-service
-    image: maquirog/evaluate:latest
-    command: ["python", "src/models/evaluate.py"]
-
-  experiment:
-    <<: *common-service
-    ports:
-      - "5000:5000"
-    environment:
-      - PYTHONPATH=/app
-      - HOST_PROJECT_PATH=${HOST_PROJECT_PATH}
-    command: ["bash", "src/experiment/entrypoint.sh"]
-    depends_on:
-      - api
-    volumes:
-      - ${HOST_PROJECT_PATH}/mlruns:/app/mlruns
-      - ${HOST_PROJECT_PATH}/metrics:/app/metrics
-
+#### === PERMANENT SERVICES === ###
   api:
     <<: *common-service
     image: maquirog/api:latest
@@ -69,20 +41,44 @@ services:
       - "8000:8000"
     command: ["uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
     restart: "no"
+    depends_on:
+      - mlflow-server
+
+  mysql:
+    image: mysql:8.0
     environment:
-      - HOST_PROJECT_PATH=${HOST_PROJECT_PATH}
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: mlflow
+      MYSQL_USER: mlflow_user
+      MYSQL_PASSWORD: mlflow_password
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    restart: unless-stopped
+    networks:
+    - mlops-net
+
+  mlflow-server:
+    <<: *common-service
+    image: maquirog/mlflow-server:latest
+    command: >
+      mlflow server
+      --host 0.0.0.0
+      --port 5050
+      --backend-store-uri mysql+pymysql://mlflow_user:mlflow_password@mysql:3306/mlflow
+      --default-artifact-root /app/mlruns
+      --serve-artifacts
+    ports:
+      - "5050:5050"
+    depends_on:
+      - mysql
+    restart: unless-stopped
 
   evidently:
     <<: *common-service
     image: maquirog/evidently:latest
-    ports:
-      - "8001:8001"
-    command: >
-      bash -c "
-        python evidently/simulate_drift.py &&
-        python evidently/run_evidently_report.py &&
-        evidently ui --workspace evidently/workspace --host 0.0.0.0 --port 8001
-      "
+    command: ["bash", "-c", "python evidently/simulate_drift.py && python evidently/run_evidently_report.py"]
 
   prometheus:
     image: prom/prometheus:latest
@@ -95,6 +91,8 @@ services:
       - "9090:9090"
     depends_on:
       - api
+    networks:
+    - mlops-net
     
   grafana:
     image: grafana/grafana:latest
@@ -106,3 +104,40 @@ services:
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning
       - ./grafana/dashboards:/var/lib/grafana/dashboards
+    networks:
+    - mlops-net
+
+### === API CALLS TO BUILD IMAGE ONLY === ###
+  prepare_weekly_dataset:
+    <<: *common-service
+    image: maquirog/prepare_weekly_dataset:latest
+    platform: linux/amd64
+    command: ["python", "src/data/prepare_weekly_dataset.py", "${CURRENT_WEEK}"]
+
+  build_features:
+    <<: *common-service
+    image: maquirog/build_features:latest
+    command: ["python", "src/data/build_features.py"]
+
+  trainer_experiment:
+    <<: *common-service
+    image: maquirog/trainer_experiment:latest
+    command: ["bash", "src/experiment_trainer/entrypoint.sh"]
+    depends_on:
+      - mlflow-server
+
+  champion_selector:
+    <<: [*common-service, *git-service]
+    image: maquirog/champion_selector:latest
+    command: python src/champion_selector/compare_and_promote.py
+    depends_on:
+      - mlflow-server
+
+
+### === VOLUMES & NETWORKS === ###
+volumes:
+  mysql-data:
+
+networks:
+  mlops-net:
+    external: true

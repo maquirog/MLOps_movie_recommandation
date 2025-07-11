@@ -57,7 +57,7 @@ docs/_build/
 target/
 
 # DotEnv configuration
-.env
+.env.local
 
 # Database
 *.db
@@ -76,6 +76,8 @@ target/
 .ipynb_checkpoints/
 
 # exclude data from source control by default
+/data/
+!/data/*.dvc
 
 # Mac OS-specific storage files
 .DS_Store
@@ -86,3 +88,15 @@ target/
 
 # Mypy cache
 .mypy_cache/
+
+# Mlruns
+mlruns/
+
+# Models
+/models/*
+!/models/*.dvc
+
+# Metrics
+/metrics/*
+!/metrics/champion_scores.json
+

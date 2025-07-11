@@ -49,6 +49,7 @@ jobs:
     name: CI/CD Pipeline
     env:
       VOLUME_MODE: "shared"
+      LOCAL_ENV_FILE: /dev/null
     runs-on: ubuntu-latest
     needs: python_build  # Ensures this job runs only after python_build completes successfully
     services:
