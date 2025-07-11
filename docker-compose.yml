@@ -107,7 +107,7 @@ services:
     networks:
     - mlops-net
 
-### === API CALLS TO BUILD IMAGE ONLY === ###
+### === API CALLS (TO BUILD IMAGE ONLY) === ###
   prepare_weekly_dataset:
     <<: *common-service
     image: maquirog/prepare_weekly_dataset:latest
@@ -122,14 +122,14 @@ services:
   trainer_experiment:
     <<: *common-service
     image: maquirog/trainer_experiment:latest
-    command: ["bash", "src/experiment_trainer/entrypoint.sh"]
+    command: ["bash", "src/models/entrypoint_experiments.sh"]
     depends_on:
       - mlflow-server
 
   champion_selector:
     <<: [*common-service, *git-service]
     image: maquirog/champion_selector:latest
-    command: python src/champion_selector/compare_and_promote.py
+    command: python src/models/compare_and_promote.py
     depends_on:
       - mlflow-server
 
