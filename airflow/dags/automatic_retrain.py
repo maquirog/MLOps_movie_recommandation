@@ -13,6 +13,8 @@ default_args = {
 }
 API_URL = os.environ.get("API_URL")
 
+current_week = int(Variable.get("current_week", default_var=0))
+
 def wait_for_api():
     if not API_URL:
         raise AirflowSkipException("API_URL not set in environment")
@@ -34,7 +36,6 @@ def wait_for_api():
 
 
 def call_prepare_weekly_dataset():
-    current_week = int(Variable.get("current_week", default_var=0))
     response = requests.post(f"{API_URL}/prepare_weekly_dataset", json={"current_week": current_week})
     if response.status_code != 200:
         raise Exception(f"Training failed: {response.text}")
@@ -44,8 +45,8 @@ def call_build_features():
     if response.status_code != 200:
         raise Exception(f"Training failed: {response.text}")
 
-def call_trainer_expirement_api():
-    response = requests.post(f"{API_URL}/trainer_experiment", json={})
+def call_trainer_experiment_api():
+    response = requests.post(f"{API_URL}/trainer_experiment", json={"experiment_name":f"week {current_week}"})
     if response.status_code != 200:
         raise Exception(f"Training failed: {response.text}")
 
@@ -85,7 +86,7 @@ with DAG(
     
     trainer_experiment_task = PythonOperator(
         task_id='launch_weekly_experiment_mlflow',
-        python_callable=call_trainer_expirement_api,
+        python_callable=call_trainer_experiment_api,
     )
 
     compare_and_promote_task = PythonOperator(
@@ -98,4 +99,5 @@ with DAG(
         python_callable=increment_week,
     )
 
+    # api_available_task >> trainer_experiment_task >> compare_and_promote_task >> increment_week_task
     api_available_task >> prepare_weekly_dataset >> build_features >> trainer_experiment_task >> compare_and_promote_task >> increment_week_task

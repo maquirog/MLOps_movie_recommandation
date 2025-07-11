@@ -32,11 +32,17 @@ services:
     platform: linux/amd64
     command: ["python", "src/data/import_raw_data.py"]
 
-  # prepare_weekly_dataset:
-  #   <<: *common-service
-  #   image: maquirog/prepare_weekly_dataset:latest
-  #   platform: linux/amd64
-  #   command: ["python", "src/data/prepare_weekly_dataset.py", "${CURRENT_WEEK}"]
+  prepare_weekly_dataset:
+    <<: *common-service
+    image: maquirog/prepare_weekly_dataset:latest
+    platform: linux/amd64
+    command: ["python", "src/data/prepare_weekly_dataset.py", "${CURRENT_WEEK}"]
+
+  build_features:
+    <<: *common-service
+    image: maquirog/build_features:latest
+    command: ["python", "src/data/build_features.py"]
+
 
   api:
     <<: *common-service
@@ -78,6 +84,20 @@ services:
     depends_on:
       - mysql
     restart: unless-stopped
+
+  trainer_experiment:
+    <<: *common-service
+    image: maquirog/trainer_experiment:latest
+    command: ["bash", "src/experiment_trainer/entrypoint.sh"]
+    depends_on:
+      - mlflow-server
+
+  champion_selector:
+    <<: [*common-service, *git-service]
+    image: maquirog/champion_selector:latest
+    command: python src/champion_selector/compare_and_promote.py
+    depends_on:
+      - mlflow-server
   
   reset-mlflow:
     image: mysql:8.0
@@ -111,6 +131,8 @@ services:
       MYSQL_PWD: mlflow_password
     networks:
     - mlops-net
+
+
 
   evidently:
     <<: *common-service
