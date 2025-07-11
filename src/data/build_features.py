@@ -132,7 +132,7 @@ if __name__ == "__main__":
 
     
     # Load raw data
-    ratings = read_ratings(DATA_RAW_DIR, "ratings.csv")
+    ratings = read_ratings(DATA_WEEKLY_DIR, "current_ratings.csv")
     print_memory_usage("Après read_ratings")
     movies = read_movies(DATA_RAW_DIR, "movies.csv")
     print_memory_usage("Après read_movies")
