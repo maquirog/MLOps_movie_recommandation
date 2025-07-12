@@ -13,14 +13,14 @@ default_args = {
     'depends_on_past': False,
 }
 API_URL = os.environ.get("API_URL")
+API_KEY = os.environ.get("API_KEY")
 
 current_week = int(Variable.get("current_week", default_var=0))
 
 def wait_for_api():
     if not API_URL:
         raise AirflowSkipException("API_URL not set in environment")
-    
-    url = f"{API_URL}/health"  # ou un endpoint simple qui répond vite
+    url = f"{API_URL}/health"
     max_retries = 10
     wait_seconds = 5
     for i in range(max_retries):
@@ -35,26 +35,29 @@ def wait_for_api():
         time.sleep(wait_seconds)
     raise AirflowSkipException("API is not available after retries")
 
-
 def call_prepare_weekly_dataset():
     current_week = int(Variable.get("current_week", default_var=0))
-    response = requests.post(f"{API_URL}/prepare_weekly_dataset", json={"current_week": current_week})
+    headers = {"x-api-key": API_KEY}
+    response = requests.post(f"{API_URL}/prepare_weekly_dataset", json={"current_week": current_week}, headers=headers)
     if response.status_code != 200:
         raise Exception(f"Training failed: {response.text}")
 
 def call_build_features():
-    response = requests.post(f"{API_URL}/build_features")
+    headers = {"x-api-key": API_KEY}
+    response = requests.post(f"{API_URL}/build_features", headers=headers)
     if response.status_code != 200:
         raise Exception(f"Training failed: {response.text}")
 
 def call_trainer_experiment_api():
     current_week = str(Variable.get("current_week", default_var=0))
-    response = requests.post(f"{API_URL}/trainer_experiment", json={"experiment_name": f"week_{current_week}"})
+    headers = {"x-api-key": API_KEY}
+    response = requests.post(f"{API_URL}/trainer_experiment", json={"experiment_name": f"week_{current_week}"}, headers=headers)
     if response.status_code != 200:
         raise Exception(f"Training failed: {response.text}")
 
 def call_run_champion_selector_api():
-    response = requests.post(f"{API_URL}/run_champion_selector")
+    headers = {"x-api-key": API_KEY}
+    response = requests.post(f"{API_URL}/run_champion_selector", headers=headers)
     if response.status_code != 200:
         raise Exception(f"Promotion failed: {response.text}")
 
@@ -66,7 +69,7 @@ with DAG(
     dag_id="automatic_retrain",
     default_args=default_args,
     description="Auto retrain if new model is better",
-    schedule_interval=None,   #@weekly
+    schedule_interval="*/20 * * * *",
     start_date=datetime(2024, 1, 1),
     catchup=False,
     tags=['ml', 'retrain'],
