@@ -5,43 +5,48 @@ import sys
 import os
 
 API_URL = os.environ.get("API_URL", "http://api:8000")
+API_KEY = os.environ.get("API_KEY")
 
 ## === Call API === ###
 def call_train_api(hyperparams, run_id=None):
     payload = {"hyperparams": hyperparams}
     if run_id:
         payload["run_id"] = run_id
-    response = requests.post(f"{API_URL}/train", 
-                             json=payload,
-                             headers={"Content-Type": "application/json"},
-                             timeout=300
-                             )
-    
+    response = requests.post(
+        f"{API_URL}/train",
+        json=payload,
+        headers={
+            "Content-Type": "application/json",
+            "x-api-key": API_KEY,
+        },
+        timeout=300
+    )
     try:
         response.raise_for_status()
         print("✅ Train API called successfully.", flush=True)
-        return response.json()  # Retourne la réponse JSON du serveur
+        return response.json()
     except requests.HTTPError as e:
         print(f"❌ Error calling Train API: {e}", flush=True)
         print("Response content:", response.text, flush=True)
         return None
 
-
 def call_predict_api(model_source=None, output_filename=None):
     payload = {
-        "model_source":model_source,
+        "model_source": model_source,
         "output_filename": output_filename
     }
-
     try:
         print(f"📡 Envoi requête à {API_URL}/predict ...", flush=True)
         response = requests.post(
             f"{API_URL}/predict",
             json=payload,
-            headers={"Content-Type": "application/json"},
+            headers={
+                "Content-Type": "application/json",
+                "x-api-key": API_KEY,
+            },
             timeout=300
         )
-        response.raise_for_status()  # Raise HTTPError for bad status codes
+        response.raise_for_status()
         data = response.json()
         print("✅ Prédiction lancée avec succès via l'API.", flush=True)
         return data
@@ -49,8 +54,7 @@ def call_predict_api(model_source=None, output_filename=None):
         print(f"❌ Erreur lors de l'appel à l'API /predict : {e}", flush=True)
         return None
 
-
-def call_evaluate_api(run_id=None, input_filename=None, output_filename = None):
+def call_evaluate_api(run_id=None, input_filename=None, output_filename=None):
     payload = {"run_id": run_id}
     if input_filename:
         payload["input_filename"] = input_filename
@@ -62,7 +66,10 @@ def call_evaluate_api(run_id=None, input_filename=None, output_filename = None):
         response = requests.post(
             f"{API_URL}/evaluate",
             json=payload,
-            headers={"Content-Type": "application/json"},
+            headers={
+                "Content-Type": "application/json",
+                "x-api-key": API_KEY,
+            },
             timeout=300
         )
         response.raise_for_status()
