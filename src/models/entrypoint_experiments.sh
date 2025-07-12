@@ -27,10 +27,10 @@ echo "ℹ️  Nom de l'expérience : $experiment_name"
 # Hyperparams ?
 if [ -z "$2" ]; then
   echo "➡️  Lancement de l'expérience MLflow avec hyperparams prédéfinis localement"
-  python -m src.experiment_trainer.grid_search_experiment --experiment_name "$experiment_name"
+  python -m src.models.grid_search_experiment --experiment_name "$experiment_name"
 else
   echo "➡️  Lancement de l'expérience MLflow avec hyperparams"
-  python -m src.experiment_trainer.grid_search_experiment --experiment_name "$experiment_name" --hyperparams_dict="$2"
+  python -m src.models.grid_search_experiment --experiment_name "$experiment_name" --hyperparams_dict="$2"
 fi
 
 

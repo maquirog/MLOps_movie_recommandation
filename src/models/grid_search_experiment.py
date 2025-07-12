@@ -17,8 +17,7 @@ BASE_DIR = os.environ.get(
 DATA_DIR = os.environ.get("DATA_DIR", os.path.join(BASE_DIR, "data"))
 MODELS_DIR = os.environ.get("MODELS_DIR", os.path.join(BASE_DIR, "models"))
 METRICS_DIR = os.environ.get("METRICS_DIR", os.path.join(BASE_DIR, "metrics"))
-PREDICT_DIR = os.environ.get("PREDICT_DIR", os.path.join(DATA_DIR, "predictions"))
-
+PREDICTIONS_DIR = os.environ.get("PREDICTIONS_DIR", os.path.join(BASE_DIR, "predictions"))
 MODEL_NAME = os.environ.get("MODEL_NAME", "movie_recommender")
 METRIC_KEY = os.environ.get("METRIC_KEY", "ndcg_10")
 MLFLOW_TRACKING_URI = os.environ.get("MLFLOW_TRACKING_URI", "http://mlflow-server:5050")
@@ -75,13 +74,13 @@ def train_predict_evaluate_log_run(hyperparams, experiment_id,
 
 def clean_dirs(best_run_id):
     # === Nettoyage prédictions ===
-    for f in os.listdir(PREDICT_DIR):
-        full_path = os.path.join(PREDICT_DIR, f)
+    for f in os.listdir(PREDICTIONS_DIR):
+        full_path = os.path.join(PREDICTIONS_DIR, f)
         if f != f"predictions_{best_run_id}.json":
             os.remove(full_path)
 
-    pred_old = os.path.join(PREDICT_DIR, f"predictions_{best_run_id}.json")
-    pred_new = os.path.join(PREDICT_DIR, "predictions_challenger.json")
+    pred_old = os.path.join(PREDICTIONS_DIR, f"predictions_{best_run_id}.json")
+    pred_new = os.path.join(PREDICTIONS_DIR, "predictions_challenger.json")
     if os.path.exists(pred_old):
         os.rename(pred_old, pred_new)
     else:

@@ -10,9 +10,8 @@ import mlflow
 BASE_DIR = os.environ.get("BASE_DIR", os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 METRICS_DIR= os.environ.get("METRICS_DIR", os.path.join(BASE_DIR, "metrics"))
 DATA_DIR= os.environ.get("DATA_DIR", os.path.join(BASE_DIR, "data"))
+PREDICTIONS_DIR= os.environ.get("PREDICTIONS_DIR", os.path.join(BASE_DIR, "predictions"))
 MLFLOW_TRACKING_URI = os.environ.get("MLFLOW_TRACKING_URI", "http://mlflow-server:5050")
-
-DEFAULT_PREDICTIONS_DIR =os.path.join(DATA_DIR, "predictions")
 
 def load_user_data(user_matrix: Union[str, pd.DataFrame], users_id: List[int] = None) -> pd.DataFrame:
     """
@@ -128,5 +127,5 @@ if __name__ == "__main__":
     
     # Save predictions to file by default unless --no_save_to_file is provided
     if not args.no_save_to_file:
-        predictions_path = os.path.join(DEFAULT_PREDICTIONS_DIR,args.output_filename)
+        predictions_path = os.path.join(PREDICTIONS_DIR,args.output_filename)
         save_predictions_to_file(predictions, predictions_path)

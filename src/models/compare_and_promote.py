@@ -18,7 +18,7 @@ METRIC_KEY = os.environ.get("METRIC_KEY", "ndcg_10")
 
 
 METRICS_DIR = os.environ.get("METRICS_DIR", os.path.join(BASE_DIR, "metrics"))
-PREDICT_DIR = os.path.join(DATA_DIR, "prediction")
+
 
 USE_API = True
 if USE_API:

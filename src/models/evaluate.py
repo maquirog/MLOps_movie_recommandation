@@ -12,9 +12,9 @@ BASE_DIR = os.environ.get("BASE_DIR", os.path.abspath(os.path.join(os.path.dirna
 METRICS_DIR= os.environ.get("METRICS_DIR", os.path.join(BASE_DIR, "metrics"))
 DATA_DIR= os.environ.get("DATA_DIR", os.path.join(BASE_DIR, "data"))
 MLFLOW_TRACKING_URI = os.environ.get("MLFLOW_TRACKING_URI", "http://mlflow-server:5050")
+PREDICTIONS_DIR = os.environ.get("PREDICTIONS_DIR", os.path.join(BASE_DIR, "predictions"))
 
 # --- DEFAULT --- #
-DEFAULT_PREDICTIONS_DIR =os.path.join(DATA_DIR, "predictions")
 DEFAULT_FAVORITES_PATH = os.path.join(DATA_DIR, "processed/user_favorites.json")
 DEFAULT_MOVIES_CSV = os.path.join(DATA_DIR, "processed/movie_matrix.csv")
 
@@ -95,7 +95,7 @@ if __name__ == "__main__":
     # Charger les films aimés et recommandés
     favorite_movies = load_json(DEFAULT_FAVORITES_PATH)
     
-    recommendations_path = os.path.join(DEFAULT_PREDICTIONS_DIR, args.input_filename)
+    recommendations_path = os.path.join(PREDICTIONS_DIR, args.input_filename)
     recommended_movies = load_json(recommendations_path)
     
     run_id = args.run_id

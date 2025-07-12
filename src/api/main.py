@@ -4,6 +4,7 @@ from fastapi.responses import JSONResponse  # For custom JSON responses
 from src.api.models import TrainRequest, PredictionRequest, EvaluateRequest, TrainerExperimentRequest
 import docker
 import os
+from uuid import uuid4
 from fastapi import Body
 
 # Initialize FastAPI app
@@ -76,7 +77,8 @@ def trigger_microservice(service_name: str, command: str = None):
         
     # Create and run the container
     container = docker_client.containers.run(
-        image=f"maquirog/{service_name}:latest",
+        image="maquirog/mlops_movie_recommandation:latest",
+        name=f"mlops-{service_name}-{uuid4().hex[:8]}",
         command=command,
         detach=True,
         volumes=volumes,
@@ -88,8 +90,10 @@ def trigger_microservice(service_name: str, command: str = None):
     )
 
     # Wait for the container to finish
-    logs = container.logs(follow=True)
-    decoded_logs = logs.decode("utf-8")
+    logs = container.logs(stream=True)
+    decoded_logs = ""
+    for chunk in logs:
+        decoded_logs += chunk.decode("utf-8")
     print(f"🚀 Logs for {service_name} microservice:\n{decoded_logs}")
     
     result = container.wait()  # Attend la fin et récupère le code de sortie
@@ -215,7 +219,7 @@ def run_trainer_experiment(request: TrainerExperimentRequest = Body(...)):
     else:
         json_params = ""
 
-    command = f"bash src/experiment_trainer/entrypoint.sh {experiment_name} '{json_params}'"
+    command = f"bash src/models/entrypoint_experiments.sh {experiment_name} '{json_params}'"
     
     return trigger_microservice(service_name="trainer_experiment", command=command)
 
@@ -223,7 +227,7 @@ def run_trainer_experiment(request: TrainerExperimentRequest = Body(...)):
 def run_champion_selector():
     return trigger_microservice(
         service_name="champion_selector",
-        command="python src/champion_selector/compare_and_promote.py"
+        command="python src/models/compare_and_promote.py"
     )
 
 @app.get("/prometheus_metrics", response_class=Response)

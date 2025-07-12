@@ -22,8 +22,8 @@ else
 fi
 
 # Étape 3: Création des images
-echo "🔩 Lancement des services de base..."
-docker-compose build
+echo "🔩 Construction des images..."
+docker-compose build import_raw_data
 
 # Étape 4: Lancement des services nécessaires
 echo "🚀 Lancement des services de base..."
