@@ -55,9 +55,40 @@ def get_first_run_id_by_model_version(model_version, model_name=MODEL_NAME) -> s
     
     return runs.iloc[0].run_id
 
+def initialise_git():
+    username = os.getenv("GITHUB_USERNAME")
+    token = os.getenv("GITHUB_TOKEN")
+    email = os.getenv("GITHUB_EMAIL")
+    
+    if not all([username, token, email]):
+        raise HTTPException(status_code=500, detail="Informations GitHub manquantes dans les variables d'environnement")
+    
+    print("🔐 Configuring Git safe.directory...")
+    subprocess.run(["git", "config", "--global", "--add", "safe.directory", "/app"], check=True)
+    subprocess.run(["git", "config", "--global", "user.name", username], check=True)
+    subprocess.run(["git", "config", "--global", "user.email", email], check=True)
+    remote_url = f"https://{username}:{token}@github.com/maquirog/MLOps_movie_recommandation.git"
+    subprocess.run(["git", "remote", "set-url", "origin", remote_url], check=True)    
 
-def predict_evaluate_log_run_champion(latest_champion_run_id, model_version,
-                                      call_predict_func=predict_func, call_evaluate_func=evaluate_func):
+def version_dataset_and_get_hash(dataset_path=os.path.join(DATA_DIR, "processed")):
+    if not os.path.exists(dataset_path):
+        raise HTTPException(status_code=404, detail=f"Dossier {dataset_path} introuvable.")
+    subprocess.run(["dvc", "add", dataset_path], check=True)
+    subprocess.run(["git", "add", f"{dataset_path}.dvc"], check=True)
+    subprocess.run(["git", "commit", "-m", "Ajout dataset processed"], check=True)
+    
+    # Récupère le hash DVC du dataset ajouté
+    dvc_file = f"{dataset_path}.dvc"
+    with open(dvc_file, "r") as f:
+        for line in f:
+            if line.strip().startswith("md5:"):
+                return line.strip().split(":")[1].strip()
+    return None
+
+
+def predict_evaluate_log_run_champion(model_version, dataset_hash,
+                                      call_predict_func=predict_func, 
+                                      call_evaluate_func=evaluate_func):
     # Paths
     model_source = os.path.join(MODELS_DIR,"model_champion.pkl")
     predictions_filename="predictions_champion.json"
@@ -90,7 +121,8 @@ def predict_evaluate_log_run_champion(latest_champion_run_id, model_version,
             "model_version": model_version, 
             "alias": "champion", 
             "model_name": MODEL_NAME,
-            "note": "Re-evaluation on new dataset"})
+            "note": "Re-evaluation on new dataset",
+            "dataset_hash_evaluate": dataset_hash})
 
     return new_run_id
     
@@ -134,22 +166,47 @@ def export_champion_model_as_pkl(model_name, champion_version, output_dir=MODELS
 
     print(f"Modèle exporté en pickle à : {output_path}")
     
-def initialise_git():
-    username = os.getenv("GITHUB_USERNAME")
-    token = os.getenv("GITHUB_TOKEN")
-    email = os.getenv("GITHUB_EMAIL")
+def get_hyperparams_from_run(run_id):
+    try:
+        run = client.get_run(run_id)
+        return run.data.params
+    except Exception as e:
+        raise HTTPException(status_code=404, detail=f"Hyperparamètres introuvables pour run_id={run_id}") from e
     
-    if not all([username, token, email]):
-        raise HTTPException(status_code=500, detail="Informations GitHub manquantes dans les variables d'environnement")
-    
-    print("🔐 Configuring Git safe.directory...")
-    subprocess.run(["git", "config", "--global", "--add", "safe.directory", "/app"], check=True)
-    subprocess.run(["git", "config", "--global", "user.name", username], check=True)
-    subprocess.run(["git", "config", "--global", "user.email", email], check=True)
-    remote_url = f"https://{username}:{token}@github.com/maquirog/MLOps_movie_recommandation.git"
-    subprocess.run(["git", "remote", "set-url", "origin", remote_url], check=True)
+def version_champion_model(champion_version, dataset_hash, metrics, hyperparams=None):
+    """
+    Crée un dossier versionné (model_vX/) avec modèle + métadonnées, DVC tracked.
+    """
+    version_str = f"model_v{champion_version}"
+    version_dir = os.path.join(BASE_DIR, "models_versions", version_str)
+    os.makedirs(version_dir, exist_ok=True)
 
-def promote_challenger_to_champ(new_champ_version):
+    # 1. Copie du modèle
+    src_model_path = os.path.join(MODELS_DIR, "model_champion.pkl")
+    dst_model_path = os.path.join(version_dir, "model.pkl")
+    subprocess.run(["cp", src_model_path, dst_model_path], check=True)
+
+    # 2. Métadonnées
+    metadata = {
+        "model_version": champion_version,
+        "dataset_hash": dataset_hash,
+        "metric_key": METRIC_KEY,
+        "metric_value": metrics.get(METRIC_KEY),
+        # "week": datetime.utcnow().isoformat(),
+        "hyperparameters": hyperparams or "unknown"
+    }
+    metadata_path = os.path.join(version_dir, "metadata.json")
+    with open(metadata_path, "w") as f:
+        json.dump(metadata, f, indent=2)
+
+    # 3. DVC tracking
+    subprocess.run(["dvc", "add", version_dir], check=True)
+    subprocess.run(["git", "add", f"{version_dir}.dvc"], check=True)
+    subprocess.run(["git", "commit", "-m", f"Ajout modèle promu {version_str}"], check=True)
+
+    
+
+def promote_challenger_to_champ(new_champ_version, dataset_hash):
     # Update Alias MLFLow
     client.set_registered_model_alias(name=MODEL_NAME, alias="champion", version=new_champ_version)
     client.delete_registered_model_alias(name=MODEL_NAME, alias="challenger")
@@ -158,6 +215,7 @@ def promote_challenger_to_champ(new_champ_version):
     print("Save champion_model.pkl localy from registry MLflow")
     export_champion_model_as_pkl(MODEL_NAME, new_champ_version)
     
+    # Renomer les scores
     challenger_metrics = os.path.join(METRICS_DIR, "challenger_scores.json")
     champion_metrics = os.path.join(METRICS_DIR, "champion_scores.json")
     if os.path.exists(challenger_metrics):
@@ -166,18 +224,18 @@ def promote_challenger_to_champ(new_champ_version):
     else:
         raise HTTPException(status_code=404, detail=f"Fichier {challenger_metrics} introuvable, rien à renommer.")
     
-    # DVC add + Git add
-    initialise_git()
-    print("Ajout des fichiers au suivi DVC et Git...")
-
-    model_dvc_file = "models/model_champion.pkl.dvc"
-    subprocess.run(["dvc", "add", "models/model_champion.pkl"], check=True)
-    subprocess.run(["git", "add", model_dvc_file, champion_metrics], check=True)
-    subprocess.run(["git", "commit", "-m", "Promote new champion model and metrics"], check=True)
+    challenger_run_id = get_first_run_id_by_model_version(str(new_champ_version))
+    hyperparams = get_hyperparams_from_run(challenger_run_id)
     
-    print("Push DVC et Git...")
-    subprocess.run(["dvc", "push"], check=True)
-    subprocess.run(["git", "push", "origin", "HEAD"], check=True)
+    # Versionning sur dvc
+    with open(os.path.join(METRICS_DIR, "champion_scores.json")) as f:
+        metrics = json.load(f)
+    version_champion_model(
+        champion_version=new_champ_version,
+        dataset_hash=dataset_hash,
+        metrics=metrics,
+        hyperparams=hyperparams  # ou passe ton dict de params ici
+    )
 
     print("Promotion effectuée avec versionnement DVC/Git.")
 
@@ -191,28 +249,50 @@ if __name__ == "__main__":
         
         if challenger_version is None:
             raise Exception("Challenger est introuvable, arrêt du script.")
-        elif champion_version is None:
-            print("Pas de champion : promouvoir challenger en champion")
-            promote_challenger_to_champ(new_champ_version=challenger_version)
         else:
-            print("Model challenger et champion trouvés, début de la comparaison...")
-            # Lancer une run du champion sur le nouveau dataset
-            first_champion_run_id = get_first_run_id_by_model_version(str(champion_version))
-            
-            new_run_id_champ = predict_evaluate_log_run_champion(first_champion_run_id, champion_version)
-            
             # Récupère la run du challenger
+            print("Versionning du dataset sur DVC")
             challenger_run_id = get_first_run_id_by_model_version(str(challenger_version))
-
-            # Compare les métriques (exemple sur ndcg_10)
-            if compare_metrics_mlflow(challenger_run_id, new_run_id_champ, metric_key=METRIC_KEY):
-                print("Promouvoir challenger en champion, champion déprécié")
-                promote_challenger_to_champ(new_champ_version=challenger_version)
+            initialise_git()
+            dataset_hash = version_dataset_and_get_hash()
+            # Tag sur la run du challenger
+            client.set_tag(challenger_run_id, "dataset_hash_train", dataset_hash)
+            # Tag sur la version du modèle (registry)
+            client.set_model_version_tag(
+                name=MODEL_NAME,
+                version=challenger_version,
+                key="dataset_hash",
+                value=dataset_hash
+            )
+            
+            if champion_version is None:
+                print("Pas de champion : promouvoir challenger en champion")
+                promote_challenger_to_champ(new_champ_version=challenger_version, dataset_hash=dataset_hash)
             else:
-                print("Champion reste, challenger déprécié")
-                # Supprime l'alias challenger (ou fait ce que tu veux)
-                client.delete_registered_model_alias(name=MODEL_NAME, alias="challenger")
-                #### update possible: suppression du fichier model_challenger.pkl
+                print("Model challenger et champion trouvés, début de la comparaison...")
+                # Lancer une run du champion sur le nouveau dataset
+                first_champion_run_id = get_first_run_id_by_model_version(str(champion_version))
+                
+                new_run_id_champ = predict_evaluate_log_run_champion(champion_version, dataset_hash=dataset_hash)
+
+                # Compare les métriques (exemple sur ndcg_10)
+                if compare_metrics_mlflow(challenger_run_id, new_run_id_champ, metric_key=METRIC_KEY):
+                    print("Promouvoir challenger en champion, champion déprécié")
+                    promote_challenger_to_champ(new_champ_version=challenger_version, dataset_hash=dataset_hash)
+                else:
+                    print("Champion reste, challenger déprécié")
+                    # Supprime l'alias challenger (ou fait ce que tu veux)
+                    client.delete_registered_model_alias(name=MODEL_NAME, alias="challenger")
+                    #### update possible: suppression du fichier model_challenger.pkl
+            
+            try:
+                print("Push DVC et Git...")
+                subprocess.run(["dvc", "push"], check=True)
+                subprocess.run(["git", "push", "origin", "HEAD"], check=True)
+            except subprocess.CalledProcessError as e:
+                print(f"Erreur lors du push DVC/Git : {e}")
+
+        
     except HTTPException as http_exc:
         # Dans un contexte API, tu gérerais cette exception en la renvoyant au client
         print(f"HTTPException levée : {http_exc.detail}")

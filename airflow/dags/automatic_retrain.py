@@ -66,7 +66,7 @@ with DAG(
     dag_id="automatic_retrain",
     default_args=default_args,
     description="Auto retrain if new model is better",
-    schedule_interval=None,   #@weekly
+    schedule_interval="@weekly",   #@weekly
     start_date=datetime(2024, 1, 1),
     catchup=False,
     tags=['ml', 'retrain'],
