@@ -65,6 +65,13 @@ def increment_week():
     week = int(Variable.get("current_week", default_var=0))
     Variable.set("current_week", week + 1)
 
+def call_evidently_report():
+    current_week = int(Variable.get("current_week", default_var=0))
+    headers = {"x-api-key": API_KEY}
+    response = requests.post(f"{API_URL}/run_evidently_report", json={"current_week": current_week}, headers=headers)
+    if response.status_code != 200:
+        raise Exception(f"Evidently report failed: {response.text}")
+
 with DAG(
     dag_id="automatic_retrain",
     default_args=default_args,
@@ -106,4 +113,10 @@ with DAG(
         python_callable=increment_week,
     )
 
-    api_available_task >> prepare_weekly_dataset >> build_features >> trainer_experiment_task >> compare_and_promote_task >> increment_week_task
+    evidently_report_task = PythonOperator(
+        task_id='run_evidently_report',
+        python_callable=call_evidently_report,
+    )
+
+    api_available_task >> [prepare_weekly_dataset, evidently_report_task]
+    prepare_weekly_dataset >> build_features >> trainer_experiment_task >> compare_and_promote_task >> increment_week_task

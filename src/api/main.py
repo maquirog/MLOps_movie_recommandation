@@ -24,7 +24,8 @@ def trigger_microservice(service_name: str, command: str = None):
             os.path.join(BASE_DIR, "metrics"): {"bind": "/app/metrics", "mode": "rw"},
             os.path.join(BASE_DIR, "predictions"): {"bind": "/app/predictions", "mode": "rw"},
             os.path.join(BASE_DIR, "reports"): {"bind": "/app/reports", "mode": "rw"},
-            os.path.join(BASE_DIR, "mlruns"): {"bind": "/app/mlruns", "mode": "rw"}
+            os.path.join(BASE_DIR, "mlruns"): {"bind": "/app/mlruns", "mode": "rw"},
+            os.path.join(BASE_DIR, "evidently"): {"bind": "/app/evidently", "mode": "rw"},  # Add this line
         }
         print("Using bind mounts from host for volumes:")
         for host_path, mount_info in volumes.items():
@@ -38,7 +39,8 @@ def trigger_microservice(service_name: str, command: str = None):
             "shared_predictions": {"bind": "/app/predictions", "mode": "rw"},
             "shared_reports": {"bind": "/app/reports", "mode": "rw"},
             "shared_mlruns": {"bind": "/app/mlruns", "mode": "rw"},
-            "shared_dvc": {"bind": "/app/.dvc", "mode": "rw"}
+            "shared_dvc": {"bind": "/app/.dvc", "mode": "rw"},
+            "shared_evidently": {"bind": "/app/evidently", "mode": "rw"},  # Add this line
         }
         print("Using named Docker volumes for volumes:")
         for vol_name, mount_info in volumes.items():
@@ -195,6 +197,18 @@ def run_champion_selector(api_key=Depends(get_api_key)):
         service_name="champion_selector",
         command="python src/models/compare_and_promote.py"
     )
+
+# ------------------- EVIDENTLY ENDPOINT -------------------
+
+@router.post("/run_evidently_report")
+def run_evidently_report(payload: dict, api_key=Depends(get_api_key)):
+    current_week = payload.get("current_week")
+    if current_week is None:
+        raise HTTPException(status_code=400, detail="Missing current_week parameter")
+    command = f"bash -c 'python evidently/run_weekly_drift.py {current_week} && python evidently/run_evidently_report.py'"
+    return trigger_microservice("evidently", command=command)
+
+# ----------------------------------------------------------
 
 @app.get("/prometheus_metrics", response_class=Response)
 def get_prometheus_metrics():
