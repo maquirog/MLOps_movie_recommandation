@@ -110,6 +110,17 @@ jobs:
         run: |
           pytest tests/api_tests.py
 
+      # Debug step: Always print logs after test (success or failure)
+      - name: Print API logs for debugging
+        if: always()
+        run: |
+          echo "==== mlops-api logs ===="
+          docker logs mlops-api || true
+          echo "==== mlflow-server logs ===="
+          docker logs mlops-mlflow_server || true
+          echo "==== mysql logs ===="
+          docker logs $(docker ps -aqf "name=mlops-mysql") || true
+
       - name: Push service images
         run: |
           docker-compose push
