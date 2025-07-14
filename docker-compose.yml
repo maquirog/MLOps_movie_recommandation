@@ -7,6 +7,8 @@ x-common-service: &common-service
   env_file:
     - .env
     - ${LOCAL_ENV_FILE:-.env.local}
+  environment:
+    API_KEY: ${API_KEY}
   volumes:
     - ./src:/app/src
     - ./data:/app/data
