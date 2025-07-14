@@ -48,6 +48,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
+      - name: List src/data contents
+        run: ls -l ./src/data
+
       - name: Install Docker Compose
         run: |
           sudo curl -L "https://github.com/docker/compose/releases/download/v2.17.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
@@ -77,13 +80,11 @@ jobs:
         run: |
           docker-compose build
 
-      # Add this step to write the API_KEY to a CI env file
-      - name: Write API_KEY to .env.ci for CI
+      - name: Write API_KEY and HOST_PROJECT_PATH to .env.ci for CI
         run: |
           echo "API_KEY=${{ secrets.API_KEY }}" > .env.ci
           echo "HOST_PROJECT_PATH=/app" >> .env.ci
 
-      # Start only infra and API (the API orchestrates the rest)
       - name: Start core services
         run: |
           docker-compose up -d mysql mlflow-server api
