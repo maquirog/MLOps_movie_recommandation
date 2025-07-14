@@ -1,5 +1,7 @@
 from airflow import DAG
-from airflow.operators.python import PythonOperator
+from airflow.operators.python import PythonOperator, BranchPythonOperator
+from airflow.operators.trigger_dagrun import TriggerDagRunOperator
+from airflow.operators.empty import EmptyOperator
 from airflow.exceptions import AirflowSkipException
 from airflow.models import Variable
 import os
@@ -14,8 +16,6 @@ default_args = {
 }
 API_URL = os.environ.get("API_URL")
 API_KEY = os.environ.get("API_KEY")
-
-current_week = int(Variable.get("current_week", default_var=0))
 
 def wait_for_api():
     if not API_URL:
@@ -72,11 +72,18 @@ def call_evidently_report():
     if response.status_code != 200:
         raise Exception(f"Evidently report failed: {response.text}")
 
+def should_trigger_again():
+    current_week = int(Variable.get("current_week", default_var=0))
+    if current_week < 29:
+        return "trigger_self"
+    else:
+        return "end_dag"
+
 with DAG(
     dag_id="automatic_retrain",
     default_args=default_args,
     description="Auto retrain if new model is better",
-    schedule_interval="*/20 * * * *",
+    schedule_interval=None,  # No schedule, self-triggering
     start_date=datetime(2024, 1, 1),
     catchup=False,
     tags=['ml', 'retrain'],
@@ -118,5 +125,23 @@ with DAG(
         python_callable=call_evidently_report,
     )
 
+    check_week = BranchPythonOperator(
+        task_id="check_week",
+        python_callable=should_trigger_again,
+    )
+
+    trigger_self = TriggerDagRunOperator(
+        task_id="trigger_self",
+        trigger_dag_id="automatic_retrain",
+        wait_for_completion=False,
+    )
+
+    end_dag = EmptyOperator(
+        task_id="end_dag"
+    )
+
+    # DAG structure
     api_available_task >> [prepare_weekly_dataset, evidently_report_task]
     prepare_weekly_dataset >> build_features >> trainer_experiment_task >> compare_and_promote_task >> increment_week_task
+    increment_week_task >> check_week
+    check_week >> [trigger_self, end_dag]
