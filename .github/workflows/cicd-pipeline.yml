@@ -146,7 +146,7 @@ jobs:
 
       - name: Run API tests with pytest
         env:
-          API_URL: http://api:8000
+          API_URL: http://localhost:8000
           API_KEY: ${{ secrets.API_KEY }}
         run: |
           pytest tests/api_tests.py
