@@ -73,72 +73,31 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Build service images
+      - name: Build all service images
         run: |
           docker-compose build
 
-      # === Validate Service Startup and Execution Order ===
-
-      - name: Validate import_raw_data service
+      # Start only infra and API (the API orchestrates the rest)
+      - name: Start core services
+        env:
+          API_KEY: ${{ secrets.API_KEY }}
         run: |
-          docker-compose up -d import_raw_data
-          CONTAINER_NAME=mlops-import_raw_data
-          echo "Waiting for $CONTAINER_NAME to complete..."
-          docker wait $CONTAINER_NAME
-          docker logs $CONTAINER_NAME
-
-      - name: Validate prepare_weekly_dataset service
-        run: |
-          export CURRENT_WEEK=1
-          docker-compose up -d prepare_weekly_dataset
-          CONTAINER_NAME=mlops-prepare_weekly_dataset
-          echo "Waiting for $CONTAINER_NAME to complete..."
-          docker wait $CONTAINER_NAME
-          docker logs $CONTAINER_NAME
-
-      - name: Validate build_features service
-        run: |
-          docker-compose up -d build_features
-          CONTAINER_NAME=mlops-build_features
-          echo "Waiting for $CONTAINER_NAME to complete..."
-          docker wait $CONTAINER_NAME
-          docker logs $CONTAINER_NAME
-
-      - name: Validate trainer_experiment service
-        run: |
-          export CURRENT_WEEK=1
-          docker-compose up -d trainer_experiment
-          CONTAINER_NAME=mlops-trainer-experiment
-          echo "Waiting for $CONTAINER_NAME to complete..."
-          docker wait $CONTAINER_NAME
-          docker logs $CONTAINER_NAME
-
-      - name: Validate champion_selector service
-        run: |
-          docker-compose up -d champion_selector
-          CONTAINER_NAME=mlops-champion_selector
-          echo "Waiting for $CONTAINER_NAME to complete..."
-          docker wait $CONTAINER_NAME
-          docker logs $CONTAINER_NAME
-
-      - name: Validate evidently service
-        run: |
-          export CURRENT_WEEK=1
-          docker-compose up -d evidently
-          CONTAINER_NAME=mlops-evidently
-          echo "Waiting for $CONTAINER_NAME to complete..."
-          docker wait $CONTAINER_NAME
-          docker logs $CONTAINER_NAME
-
-      - name: Validate API service
-        run: |
-          docker-compose up -d api
-          CONTAINER_NAME=mlops-api
-          echo "Waiting for $CONTAINER_NAME to start..."
+          docker-compose up -d mysql mlflow-server api
           sleep 10
-          docker logs $CONTAINER_NAME
+          docker-compose ps
 
-      # Optionally test mlflow-server, prometheus, grafana, mysql
+      - name: Wait for API to be ready
+        run: |
+          for i in {1..15}; do
+            if curl -fs http://localhost:8000/health; then
+              echo "API is ready!"
+              exit 0
+            fi
+            echo "Waiting for API to be ready..."
+            sleep 4
+          done
+          echo "API did not become ready in time."
+          exit 1
 
       - name: Install testing dependencies
         run: |
