@@ -83,7 +83,7 @@ jobs:
       - name: Write API_KEY and HOST_PROJECT_PATH to .env.ci for CI
         run: |
           echo "API_KEY=${{ secrets.API_KEY }}" > .env.ci
-          echo "HOST_PROJECT_PATH=/app" >> .env.ci
+          echo "HOST_PROJECT_PATH=$GITHUB_WORKSPACE" >> .env.ci
 
       - name: Start core services
         run: |
