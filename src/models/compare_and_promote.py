@@ -81,7 +81,7 @@ def version_dataset_and_get_hash(dataset_path=os.path.join(DATA_DIR, "processed"
     dvc_file = f"{dataset_path}.dvc"
     with open(dvc_file, "r") as f:
         for line in f:
-            if line.strip().startswith("md5:"):
+            if "md5:" in line:
                 return line.strip().split(":")[1].strip()
     return None
 
@@ -178,12 +178,13 @@ def version_champion_model(champion_version, dataset_hash, metrics, hyperparams=
     Crée un dossier versionné (model_vX/) avec modèle + métadonnées, DVC tracked.
     """
     version_str = f"model_v{champion_version}"
-    version_dir = os.path.join(BASE_DIR, "models_versions", version_str)
+    version_dir = os.path.join(MODELS_DIR, "models_versions", version_str)
     os.makedirs(version_dir, exist_ok=True)
 
     # 1. Copie du modèle
     src_model_path = os.path.join(MODELS_DIR, "model_champion.pkl")
     dst_model_path = os.path.join(version_dir, "model.pkl")
+    print(f"DEBUG: Copying {src_model_path} → {dst_model_path}")
     subprocess.run(["cp", src_model_path, dst_model_path], check=True)
 
     # 2. Métadonnées
@@ -202,6 +203,8 @@ def version_champion_model(champion_version, dataset_hash, metrics, hyperparams=
     # 3. DVC tracking
     subprocess.run(["dvc", "add", version_dir], check=True)
     subprocess.run(["git", "add", f"{version_dir}.dvc"], check=True)
+    subprocess.run(["dvc", "add", src_model_path], check=True)
+    subprocess.run(["git", "add", f"{src_model_path}.dvc"], check=True)
     subprocess.run(["git", "commit", "-m", f"Ajout modèle promu {version_str}"], check=True)
 
     
@@ -224,10 +227,9 @@ def promote_challenger_to_champ(new_champ_version, dataset_hash):
     else:
         raise HTTPException(status_code=404, detail=f"Fichier {challenger_metrics} introuvable, rien à renommer.")
     
+    # Versionning models sur dvc
     challenger_run_id = get_first_run_id_by_model_version(str(new_champ_version))
     hyperparams = get_hyperparams_from_run(challenger_run_id)
-    
-    # Versionning sur dvc
     with open(os.path.join(METRICS_DIR, "champion_scores.json")) as f:
         metrics = json.load(f)
     version_champion_model(
@@ -237,6 +239,14 @@ def promote_challenger_to_champ(new_champ_version, dataset_hash):
         hyperparams=hyperparams  # ou passe ton dict de params ici
     )
 
+    # Supprimer l'ancien modèle challenger local s’il existe
+    challenger_model_path = os.path.join(MODELS_DIR, "model_challenger.pkl")
+    if os.path.exists(challenger_model_path):
+        os.remove(challenger_model_path)
+        print(f"🧹 Supprimé : {challenger_model_path}")
+    else:
+        print(f"ℹ️ Aucun fichier modèle challenger à supprimer : {challenger_model_path}")
+        
     print("Promotion effectuée avec versionnement DVC/Git.")
 
 if __name__ == "__main__":

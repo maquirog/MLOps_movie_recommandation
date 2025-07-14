@@ -71,10 +71,10 @@ def evaluate_and_save_metrics(favorites, recommendations, run_id=None,
         with open(output_filename, "w") as f:
             json.dump(metrics, f, indent=4)
            
-
-    print(f"📎 Logging to existing run: {run_id}")
-    with mlflow.start_run(run_id=run_id):
-        mlflow.log_metrics(metrics)
+    if run_id:
+        print(f"📎 Logging to existing run: {run_id}")
+        with mlflow.start_run(run_id=run_id):
+            mlflow.log_metrics(metrics)
 
     print("\n📊 Recommandation Evaluation Metrics")
     for key, val in metrics.items():
@@ -82,7 +82,7 @@ def evaluate_and_save_metrics(favorites, recommendations, run_id=None,
     
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--run_id", type=str, required=True, help="MLflow run ID for logging metrics")
+    parser.add_argument("--run_id", type=str, help="MLflow run ID for logging metrics")
     parser.add_argument("--input_filename", type=str, default="predictions.json", help="Nom du fichier d'entré des prédictions.")
     parser.add_argument("--output_filename", type=str, default="scores.json", help="Nom du fichier de sortie des métrics.")
     args = parser.parse_args()

@@ -75,10 +75,6 @@ target/
 # Jupyter NB Checkpoints
 .ipynb_checkpoints/
 
-# exclude data from source control by default
-/data/
-!/data/*.dvc
-
 # Mac OS-specific storage files
 .DS_Store
 
@@ -92,9 +88,10 @@ target/
 # Mlruns
 mlruns/
 
-# Models
+# Ignore model artifacts
 /models/*
 !/models/*.dvc
+!/models/models_versions/*.dvc
 
 # Metrics
 /metrics/*

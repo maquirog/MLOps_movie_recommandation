@@ -5,6 +5,14 @@ import sys
 import os
 
 API_URL = os.environ.get("API_URL", "http://api:8000")
+STRICT_MODE = os.environ.get("STRICT_MODE", "false").lower() == "true"
+
+## === Helpers === ##
+def _raise_error(message, details=None):
+    print(f"❌ {message}", flush=True)
+    if details:
+        print(details, flush=True)
+    raise RuntimeError(message)
 
 ## === Call API === ###
 def call_train_api(hyperparams, run_id=None):
@@ -22,9 +30,8 @@ def call_train_api(hyperparams, run_id=None):
         print("✅ Train API called successfully.", flush=True)
         return response.json()  # Retourne la réponse JSON du serveur
     except requests.HTTPError as e:
-        print(f"❌ Error calling Train API: {e}", flush=True)
-        print("Response content:", response.text, flush=True)
-        return None
+        content = response.text if 'response' in locals() else "Pas de réponse."
+        _raise_error("Erreur lors de l'appel à l'API /train", f"{e}\n{content}")
 
 
 def call_predict_api(model_source=None, output_filename=None):
@@ -46,8 +53,9 @@ def call_predict_api(model_source=None, output_filename=None):
         print("✅ Prédiction lancée avec succès via l'API.", flush=True)
         return data
     except requests.RequestException as e:
-        print(f"❌ Erreur lors de l'appel à l'API /predict : {e}", flush=True)
-        return None
+        content = response.text if 'response' in locals() else "Pas de réponse."
+        _raise_error("Erreur lors de l'appel à l'API /predict", f"{e}\n{content}")
+
 
 
 def call_evaluate_api(run_id=None, input_filename=None, output_filename = None):
@@ -70,16 +78,20 @@ def call_evaluate_api(run_id=None, input_filename=None, output_filename = None):
         print("✅ Évaluation réussie via l’API.", flush=True)
         return data
     except requests.RequestException as e:
-        print(f"❌ Erreur lors de l'appel à l'API /evaluate : {e}", flush=True)
-        return None
+        content = response.text if 'response' in locals() else "Pas de réponse."
+        _raise_error("Erreur lors de l'appel à l'API /evaluate", f"{e}\n{content}")
+
 
 
 ### === Call en local === ###
 def call_train(hyperparams, run_id):
     json_params = json.dumps(hyperparams)
     command = f"python ../models/train.py --hyperparams_dict '{json_params}' --run_id {run_id}"
-    subprocess.run(command, shell=True, check=True, stdout=sys.stdout, stderr=sys.stderr)
-
+    try:
+        subprocess.run(command, shell=True, check=True, stdout=sys.stdout, stderr=sys.stderr)
+    except subprocess.CalledProcessError as e:
+        _raise_error("Échec du script local de training", f"Commande: {command}")
+        
 def call_predict(run_id=None, output_filename = None):
     print("🧠 Predicting locally...", flush=True)
     command = "python ../models/predict.py"
@@ -87,8 +99,11 @@ def call_predict(run_id=None, output_filename = None):
         command += f" --model_source runs:/{run_id}/model"
     if output_filename:
         command += f" --output_filename {output_filename}"
-    subprocess.run(command, shell=True, check=True, stdout=sys.stdout, stderr=sys.stderr)
-
+    try:
+        subprocess.run(command, shell=True, check=True, stdout=sys.stdout, stderr=sys.stderr)
+    except subprocess.CalledProcessError as e:
+        _raise_error("Échec du script local de prédiction", f"Commande: {command}")
+        
 def call_evaluate(run_id=None, input_filename = None):
     print("📊 Evaluating locally...", flush=True)
     command = "python ../models/evaluate.py"
@@ -112,7 +127,7 @@ def call_evaluate(run_id=None, input_filename = None):
         metrics = json.loads(first_line)
         print("✅ Metrics récupérées :", metrics)
         return metrics
-    except json.JSONDecodeError:
-        print("⚠️ Impossible de parser les métriques retournées.")
-        print("Sortie brute :", result.stdout)
-        return None
+    except subprocess.CalledProcessError as e:
+        _raise_error("Evaluate script crashed", f"stdout: {e.stdout}\nstderr: {e.stderr}")
+    except (json.JSONDecodeError, IndexError):
+        _raise_error("Impossible de parser les métriques retournées", f"Sortie brute :\n{result.stdout}")

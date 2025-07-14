@@ -103,7 +103,7 @@ def clean_dirs(best_run_id):
     # === Nettoyage models ===
     for f in os.listdir(MODELS_DIR):
         full_path = os.path.join(MODELS_DIR, f)
-        if f not in [f"model_{best_run_id}.pkl", "model_champion.pkl","model_champion.pkl.dvc"]:
+        if os.path.isfile(full_path) and f not in [f"model_{best_run_id}.pkl", "model_champion.pkl","model_champion.pkl.dvc"]:
             os.remove(full_path)
 
     model_old = os.path.join(MODELS_DIR, f"model_{best_run_id}.pkl")
