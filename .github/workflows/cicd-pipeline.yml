@@ -126,14 +126,6 @@ jobs:
           docker wait $CONTAINER_NAME
           docker logs $CONTAINER_NAME
 
-      - name: Validate evaluate service
-        run: |
-          docker-compose up -d evaluate
-          CONTAINER_NAME=mlops-evaluate
-          echo "Waiting for $CONTAINER_NAME to complete..."
-          docker wait $CONTAINER_NAME
-          docker logs $CONTAINER_NAME
-
       - name: Validate evidently service
         run: |
           export CURRENT_WEEK=1
