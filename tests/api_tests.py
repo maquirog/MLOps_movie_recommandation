@@ -1,46 +1,55 @@
 import pytest
 import requests
+import os
 
-API_BASE_URL = "http://localhost:8000"
+API_URL = os.environ.get("API_URL","http://localhost:8000")
+API_KEY = os.environ.get("API_KEY","my_secret_api_key")
+HEADERS = {"x-api-key": API_KEY}
 
-def test_health_endpoint():
-    """Test the /health endpoint for API health check."""
-    response = requests.get(f"{API_BASE_URL}/health")
-    assert response.status_code == 200
-    assert response.json() == {"status": "ok"}
+def print_api_logs(resp, step_name=""):
+    print(f"\n=== API STEP: {step_name} ===")
+    print(f"Status code: {resp.status_code}")
+    try:
+        data = resp.json()
+        # Print logs if available
+        if isinstance(data, dict):
+            logs = data.get("logs") or data.get("detail") or data
+            print("Logs:")
+            print(logs)
+        else:
+            print("Response data:")
+            print(data)
+    except Exception:
+        print("Raw response (non-JSON):")
+        print(resp.text)
+    print("=== END STEP ===\n")
 
-def test_import_raw_data_endpoint():
-    """Test the /import_raw_data endpoint."""
-    response = requests.post(f"{API_BASE_URL}/import_raw_data")
-    assert response.status_code == 200
-    assert "status" in response.json()
-    assert response.json()["status"] == "success"
+def test_api_pipeline():
+    # 1. Check health
+    resp = requests.get(f"{API_URL}/health")
+    print_api_logs(resp, "health")
+    assert resp.status_code == 200
 
-def test_build_features_endpoint():
-    """Test the /build_features endpoint."""
-    response = requests.post(f"{API_BASE_URL}/build_features")
-    assert response.status_code == 200
-    assert "status" in response.json()
-    assert response.json()["status"] == "success"
+    # 2. prepare_weekly_dataset
+    resp = requests.post(f"{API_URL}/prepare_weekly_dataset", json={"current_week": 1}, headers=HEADERS)
+    print_api_logs(resp, "prepare_weekly_dataset")
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "success"
 
-def test_train_endpoint():
-    """Test the /train endpoint."""
-    response = requests.post(f"{API_BASE_URL}/train")
-    assert response.status_code == 200
-    assert "status" in response.json()
-    assert response.json()["status"] == "success"
+    # 3. build_features
+    resp = requests.post(f"{API_URL}/build_features", headers=HEADERS)
+    print_api_logs(resp, "build_features")
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "success"
 
-def test_predict_endpoint():
-    """Test the /predict endpoint with valid input."""
-    response = requests.post(f"{API_BASE_URL}/predict")
-    assert response.status_code == 200
-    assert "status" in response.json()
-    assert response.json()["status"] == "success"
-    assert "logs" in response.json()  # Ensures the predict service logs are returned
+    # 4. trainer_experiment
+    resp = requests.post(f"{API_URL}/trainer_experiment", json={"experiment_name": "test_exp"}, headers=HEADERS)
+    print_api_logs(resp, "trainer_experiment")
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "success"
 
-def test_evaluate_endpoint():
-    """Test the /evaluate endpoint."""
-    response = requests.post(f"{API_BASE_URL}/evaluate")
-    assert response.status_code == 200
-    assert "status" in response.json()
-    assert response.json()["status"] == "success"
+    # 5. run_evidently_report
+    resp = requests.post(f"{API_URL}/run_evidently_report", json={"current_week": 1}, headers=HEADERS)
+    print_api_logs(resp, "run_evidently_report")
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "success"

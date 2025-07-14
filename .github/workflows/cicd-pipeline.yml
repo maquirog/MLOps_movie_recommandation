@@ -2,10 +2,10 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches: 
+    branches:
       - master
   pull_request:
-    branches: 
+    branches:
       - master
 
 jobs:
@@ -31,11 +31,6 @@ jobs:
         run: |
           flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
           flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
-
-      # Uncomment if you want to run regular Python tests
-      # - name: Test with pytest
-      #   run: |
-      #     pytest -o log_cli=1 -o log_cli_level=INFO
 
   cicd_pipeline:
     name: CI/CD Pipeline
@@ -150,6 +145,9 @@ jobs:
           pip install pytest requests
 
       - name: Run API tests with pytest
+        env:
+          API_URL: http://api:8000
+          API_KEY: ${{ secrets.API_KEY }}
         run: |
           pytest tests/api_tests.py
 
