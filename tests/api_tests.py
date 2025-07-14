@@ -25,30 +25,36 @@ def print_api_logs(resp, step_name=""):
     print("=== END STEP ===\n")
 
 def test_api_pipeline():
-    # 1. Check health
+
     resp = requests.get(f"{API_URL}/health")
     print_api_logs(resp, "health")
     assert resp.status_code == 200
 
-    # 2. prepare_weekly_dataset
+
+    resp = requests.post(f"{API_URL}/import_raw_data", headers=HEADERS)
+    print_api_logs(resp, "import_raw_data")
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "success"
+
+
     resp = requests.post(f"{API_URL}/prepare_weekly_dataset", json={"current_week": 1}, headers=HEADERS)
     print_api_logs(resp, "prepare_weekly_dataset")
     assert resp.status_code == 200
     assert resp.json()["status"] == "success"
 
-    # 3. build_features
+
     resp = requests.post(f"{API_URL}/build_features", headers=HEADERS)
     print_api_logs(resp, "build_features")
     assert resp.status_code == 200
     assert resp.json()["status"] == "success"
 
-    # 4. trainer_experiment
+
     resp = requests.post(f"{API_URL}/trainer_experiment", json={"experiment_name": "test_exp"}, headers=HEADERS)
     print_api_logs(resp, "trainer_experiment")
     assert resp.status_code == 200
     assert resp.json()["status"] == "success"
 
-    # 5. run_evidently_report
+
     resp = requests.post(f"{API_URL}/run_evidently_report", json={"current_week": 1}, headers=HEADERS)
     print_api_logs(resp, "run_evidently_report")
     assert resp.status_code == 200

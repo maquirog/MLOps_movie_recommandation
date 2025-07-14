@@ -81,6 +81,7 @@ jobs:
       - name: Write API_KEY to .env.ci for CI
         run: |
           echo "API_KEY=${{ secrets.API_KEY }}" > .env.ci
+          echo "HOST_PROJECT_PATH=/app" >> .env.ci
 
       # Start only infra and API (the API orchestrates the rest)
       - name: Start core services
