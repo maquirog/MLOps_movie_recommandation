@@ -9,147 +9,148 @@ on:
       - master
 
 jobs:
-  # Python Application Section
   python_build:
     name: Python Application
     runs-on: ubuntu-latest
 
     steps:
-      # Checkout the repository
       - uses: actions/checkout@v3
 
-      # Set up Python
       - name: Set up Python 3.10
         uses: actions/setup-python@v3
         with:
           python-version: "3.10"
 
-      # Install dependencies
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install flake8 pytest requests-mock
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-      # Lint with flake8
       - name: Lint with flake8
         run: |
-          # Stop the build if there are Python syntax errors or undefined names
           flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-          # Exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
           flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
 
-      # Run tests with pytest (optional, uncomment if needed)
+      # Uncomment if you want to run regular Python tests
       # - name: Test with pytest
       #   run: |
       #     pytest -o log_cli=1 -o log_cli_level=INFO
 
-  # CI/CD Pipeline Section
   cicd_pipeline:
     name: CI/CD Pipeline
     env:
       VOLUME_MODE: "shared"
       LOCAL_ENV_FILE: /dev/null
     runs-on: ubuntu-latest
-    needs: python_build  # Ensures this job runs only after python_build completes successfully
+    needs: python_build
     services:
       docker:
         image: docker:19.03.12
         options: --privileged
 
     steps:
-      # Checkout the repository
       - name: Checkout code
         uses: actions/checkout@v3
 
-      # Install Docker Compose
       - name: Install Docker Compose
         run: |
           sudo curl -L "https://github.com/docker/compose/releases/download/v2.17.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
           sudo chmod +x /usr/local/bin/docker-compose
           docker-compose --version
 
-      # Set up Docker Buildx
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
 
-      # Log in to DockerHub
       - name: Log in to DockerHub
         uses: docker/login-action@v2
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      # Build Docker images for all services
       - name: Build service images
         run: |
           docker-compose build
 
-      # Run and validate import_raw_data service
+      # === Validate Service Startup and Execution Order ===
+
       - name: Validate import_raw_data service
         run: |
           docker-compose up -d import_raw_data
-          CONTAINER_NAME=$(docker ps --filter "name=import_raw_data" --format "{{.Names}}")
+          CONTAINER_NAME=mlops-import_raw_data
           echo "Waiting for $CONTAINER_NAME to complete..."
           docker wait $CONTAINER_NAME
           docker logs $CONTAINER_NAME
 
-      # Run and validate build_features service
+      - name: Validate prepare_weekly_dataset service
+        run: |
+          export CURRENT_WEEK=1
+          docker-compose up -d prepare_weekly_dataset
+          CONTAINER_NAME=mlops-prepare_weekly_dataset
+          echo "Waiting for $CONTAINER_NAME to complete..."
+          docker wait $CONTAINER_NAME
+          docker logs $CONTAINER_NAME
+
       - name: Validate build_features service
         run: |
           docker-compose up -d build_features
-          CONTAINER_NAME=$(docker ps --filter "name=build_features" --format "{{.Names}}")
+          CONTAINER_NAME=mlops-build_features
           echo "Waiting for $CONTAINER_NAME to complete..."
           docker wait $CONTAINER_NAME
           docker logs $CONTAINER_NAME
 
-      # Run and validate train service
-      - name: Validate train service
+      - name: Validate trainer_experiment service
         run: |
-          docker-compose up -d train
-          CONTAINER_NAME=$(docker ps --filter "name=train" --format "{{.Names}}")
+          export CURRENT_WEEK=1
+          docker-compose up -d trainer_experiment
+          CONTAINER_NAME=mlops-trainer-experiment
           echo "Waiting for $CONTAINER_NAME to complete..."
           docker wait $CONTAINER_NAME
           docker logs $CONTAINER_NAME
 
-      # Run and validate predict service
-      - name: Validate predict service
+      - name: Validate champion_selector service
         run: |
-          docker-compose up -d predict
-          CONTAINER_NAME=$(docker ps --filter "name=predict" --format "{{.Names}}")
+          docker-compose up -d champion_selector
+          CONTAINER_NAME=mlops-champion_selector
           echo "Waiting for $CONTAINER_NAME to complete..."
           docker wait $CONTAINER_NAME
           docker logs $CONTAINER_NAME
 
-      # Run and validate evaluate service
       - name: Validate evaluate service
         run: |
           docker-compose up -d evaluate
-          CONTAINER_NAME=$(docker ps --filter "name=evaluate" --format "{{.Names}}")
+          CONTAINER_NAME=mlops-evaluate
           echo "Waiting for $CONTAINER_NAME to complete..."
           docker wait $CONTAINER_NAME
           docker logs $CONTAINER_NAME
 
-      # Run and validate API service
+      - name: Validate evidently service
+        run: |
+          export CURRENT_WEEK=1
+          docker-compose up -d evidently
+          CONTAINER_NAME=mlops-evidently
+          echo "Waiting for $CONTAINER_NAME to complete..."
+          docker wait $CONTAINER_NAME
+          docker logs $CONTAINER_NAME
+
       - name: Validate API service
         run: |
           docker-compose up -d api
-          CONTAINER_NAME=$(docker ps --filter "name=api" --format "{{.Names}}")
+          CONTAINER_NAME=mlops-api
           echo "Waiting for $CONTAINER_NAME to start..."
           sleep 10
           docker logs $CONTAINER_NAME
 
-      # Install dependencies for API testing
+      # Optionally test mlflow-server, prometheus, grafana, mysql
+
       - name: Install testing dependencies
         run: |
           pip install pytest requests
 
-      # Run API tests
       - name: Run API tests with pytest
         run: |
           pytest tests/api_tests.py
 
-      # Push Docker images to the registry
       - name: Push service images
         run: |
           docker-compose push
