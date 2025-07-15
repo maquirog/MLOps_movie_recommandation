@@ -13,8 +13,9 @@ x-common-service: &common-service
     - ./models:/app/models
     - ./metrics:/app/metrics
     - ./reports:/app/reports
-    - "/var/run/docker.sock:/var/run/docker.sock"
     - ./mlruns:/app/mlruns
+    - ./evidently:/app/evidently
+    - "/var/run/docker.sock:/var/run/docker.sock"
   working_dir: /app
   restart: "no"
   networks:
@@ -81,7 +82,7 @@ services:
     <<: *common-service
     image: maquirog/mlops_movie_recommandation:latest
     container_name: mlops-evidently
-    command: ["bash", "-c", "python evidently/simulate_drift.py && python evidently/run_evidently_report.py"]
+    command: ["bash", "-c", "python evidently/run_weekly_drift.py ${CURRENT_WEEK} && python evidently/run_evidently_report.py"]
 
   prometheus:
     image: prom/prometheus:latest

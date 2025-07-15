@@ -2,154 +2,131 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches: 
+    branches:
       - master
   pull_request:
-    branches: 
+    branches:
       - master
 
 jobs:
-  # Python Application Section
   python_build:
     name: Python Application
     runs-on: ubuntu-latest
 
     steps:
-      # Checkout the repository
       - uses: actions/checkout@v3
 
-      # Set up Python
       - name: Set up Python 3.10
         uses: actions/setup-python@v3
         with:
           python-version: "3.10"
 
-      # Install dependencies
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install flake8 pytest requests-mock
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-      # Lint with flake8
       - name: Lint with flake8
         run: |
-          # Stop the build if there are Python syntax errors or undefined names
           flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-          # Exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
           flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
 
-      # Run tests with pytest (optional, uncomment if needed)
-      # - name: Test with pytest
-      #   run: |
-      #     pytest -o log_cli=1 -o log_cli_level=INFO
-
-  # CI/CD Pipeline Section
   cicd_pipeline:
     name: CI/CD Pipeline
     env:
       VOLUME_MODE: "shared"
       LOCAL_ENV_FILE: /dev/null
     runs-on: ubuntu-latest
-    needs: python_build  # Ensures this job runs only after python_build completes successfully
+    needs: python_build
     services:
       docker:
         image: docker:19.03.12
         options: --privileged
 
     steps:
-      # Checkout the repository
       - name: Checkout code
         uses: actions/checkout@v3
 
-      # Install Docker Compose
+      - name: List src/data contents
+        run: ls -l ./src/data
+
       - name: Install Docker Compose
         run: |
           sudo curl -L "https://github.com/docker/compose/releases/download/v2.17.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
           sudo chmod +x /usr/local/bin/docker-compose
           docker-compose --version
 
-      # Set up Docker Buildx
+      - name: Create mlops-net Docker network if not exists
+        run: |
+          NETWORK_NAME="mlops-net"
+          if ! docker network ls --format '{{.Name}}' | grep -q "^${NETWORK_NAME}$"; then
+            echo "🔗 Création du réseau Docker ${NETWORK_NAME}..."
+            docker network create ${NETWORK_NAME}
+          else
+            echo "✅ Réseau ${NETWORK_NAME} déjà existant."
+          fi
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
 
-      # Log in to DockerHub
       - name: Log in to DockerHub
         uses: docker/login-action@v2
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      # Build Docker images for all services
-      - name: Build service images
+      - name: Build all service images
         run: |
           docker-compose build
 
-      # Run and validate import_raw_data service
-      - name: Validate import_raw_data service
+      - name: Write API_KEY and HOST_PROJECT_PATH to .env.ci for CI
         run: |
-          docker-compose up -d import_raw_data
-          CONTAINER_NAME=$(docker ps --filter "name=import_raw_data" --format "{{.Names}}")
-          echo "Waiting for $CONTAINER_NAME to complete..."
-          docker wait $CONTAINER_NAME
-          docker logs $CONTAINER_NAME
+          echo "API_KEY=${{ secrets.API_KEY }}" > .env.ci
+          echo "HOST_PROJECT_PATH=$GITHUB_WORKSPACE" >> .env.ci
 
-      # Run and validate build_features service
-      - name: Validate build_features service
+      - name: Start core services
         run: |
-          docker-compose up -d build_features
-          CONTAINER_NAME=$(docker ps --filter "name=build_features" --format "{{.Names}}")
-          echo "Waiting for $CONTAINER_NAME to complete..."
-          docker wait $CONTAINER_NAME
-          docker logs $CONTAINER_NAME
-
-      # Run and validate train service
-      - name: Validate train service
-        run: |
-          docker-compose up -d train
-          CONTAINER_NAME=$(docker ps --filter "name=train" --format "{{.Names}}")
-          echo "Waiting for $CONTAINER_NAME to complete..."
-          docker wait $CONTAINER_NAME
-          docker logs $CONTAINER_NAME
-
-      # Run and validate predict service
-      - name: Validate predict service
-        run: |
-          docker-compose up -d predict
-          CONTAINER_NAME=$(docker ps --filter "name=predict" --format "{{.Names}}")
-          echo "Waiting for $CONTAINER_NAME to complete..."
-          docker wait $CONTAINER_NAME
-          docker logs $CONTAINER_NAME
-
-      # Run and validate evaluate service
-      - name: Validate evaluate service
-        run: |
-          docker-compose up -d evaluate
-          CONTAINER_NAME=$(docker ps --filter "name=evaluate" --format "{{.Names}}")
-          echo "Waiting for $CONTAINER_NAME to complete..."
-          docker wait $CONTAINER_NAME
-          docker logs $CONTAINER_NAME
-
-      # Run and validate API service
-      - name: Validate API service
-        run: |
-          docker-compose up -d api
-          CONTAINER_NAME=$(docker ps --filter "name=api" --format "{{.Names}}")
-          echo "Waiting for $CONTAINER_NAME to start..."
+          docker-compose up -d mysql mlflow-server api
           sleep 10
-          docker logs $CONTAINER_NAME
+          docker-compose ps
+        env:
+          LOCAL_ENV_FILE: .env.ci
 
-      # Install dependencies for API testing
+      - name: Wait for API to be ready
+        run: |
+          for i in {1..15}; do
+            if curl -fs http://localhost:8000/health; then
+              echo "API is ready!"
+              exit 0
+            fi
+            echo "Waiting for API to be ready..."
+            sleep 4
+          done
+          echo "API did not become ready in time."
+          exit 1
+
       - name: Install testing dependencies
         run: |
           pip install pytest requests
 
-      # Run API tests
       - name: Run API tests with pytest
+        env:
+          API_URL: http://localhost:8000
+          API_KEY: ${{ secrets.API_KEY }}
         run: |
           pytest tests/api_tests.py
 
-      # Push Docker images to the registry
+      - name: Print API logs for debugging
+        if: always()
+        run: |
+          echo "==== mlops-api logs ===="
+          docker logs mlops-api || true
+          echo "==== mlflow-server logs ===="
+          docker logs mlops-mlflow_server || true
+          echo "==== mysql logs ===="
+          docker logs $(docker ps -aqf "name=mlops-mysql") || true
+
       - name: Push service images
         run: |
           docker-compose push

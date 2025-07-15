@@ -1,5 +1,7 @@
 from airflow import DAG
-from airflow.operators.python import PythonOperator
+from airflow.operators.python import PythonOperator, BranchPythonOperator
+from airflow.operators.trigger_dagrun import TriggerDagRunOperator
+from airflow.operators.empty import EmptyOperator
 from airflow.exceptions import AirflowSkipException
 from airflow.models import Variable
 import os
@@ -13,14 +15,12 @@ default_args = {
     'depends_on_past': False,
 }
 API_URL = os.environ.get("API_URL")
-
-current_week = int(Variable.get("current_week", default_var=0))
+API_KEY = os.environ.get("API_KEY")
 
 def wait_for_api():
     if not API_URL:
         raise AirflowSkipException("API_URL not set in environment")
-    
-    url = f"{API_URL}/health"  # ou un endpoint simple qui répond vite
+    url = f"{API_URL}/health"
     max_retries = 10
     wait_seconds = 5
     for i in range(max_retries):
@@ -35,26 +35,29 @@ def wait_for_api():
         time.sleep(wait_seconds)
     raise AirflowSkipException("API is not available after retries")
 
-
 def call_prepare_weekly_dataset():
     current_week = int(Variable.get("current_week", default_var=0))
-    response = requests.post(f"{API_URL}/prepare_weekly_dataset", json={"current_week": current_week})
+    headers = {"x-api-key": API_KEY}
+    response = requests.post(f"{API_URL}/prepare_weekly_dataset", json={"current_week": current_week}, headers=headers)
     if response.status_code != 200:
         raise Exception(f"Training failed: {response.text}")
 
 def call_build_features():
-    response = requests.post(f"{API_URL}/build_features")
+    headers = {"x-api-key": API_KEY}
+    response = requests.post(f"{API_URL}/build_features", headers=headers)
     if response.status_code != 200:
         raise Exception(f"Training failed: {response.text}")
 
 def call_trainer_experiment_api():
     current_week = str(Variable.get("current_week", default_var=0))
-    response = requests.post(f"{API_URL}/trainer_experiment", json={"experiment_name": f"week_{current_week}"})
+    headers = {"x-api-key": API_KEY}
+    response = requests.post(f"{API_URL}/trainer_experiment", json={"experiment_name": f"week_{current_week}"}, headers=headers)
     if response.status_code != 200:
         raise Exception(f"Training failed: {response.text}")
 
 def call_run_champion_selector_api():
-    response = requests.post(f"{API_URL}/run_champion_selector")
+    headers = {"x-api-key": API_KEY}
+    response = requests.post(f"{API_URL}/run_champion_selector", headers=headers)
     if response.status_code != 200:
         raise Exception(f"Promotion failed: {response.text}")
 
@@ -62,11 +65,25 @@ def increment_week():
     week = int(Variable.get("current_week", default_var=0))
     Variable.set("current_week", week + 1)
 
+def call_evidently_report():
+    current_week = int(Variable.get("current_week", default_var=0))
+    headers = {"x-api-key": API_KEY}
+    response = requests.post(f"{API_URL}/run_evidently_report", json={"current_week": current_week}, headers=headers)
+    if response.status_code != 200:
+        raise Exception(f"Evidently report failed: {response.text}")
+
+def should_trigger_again():
+    current_week = int(Variable.get("current_week", default_var=0))
+    if current_week < 29:
+        return "trigger_self"
+    else:
+        return "end_dag"
+
 with DAG(
     dag_id="automatic_retrain",
     default_args=default_args,
     description="Auto retrain if new model is better",
-    schedule_interval=None,   #@weekly
+    schedule_interval=None,  # No schedule, self-triggering
     start_date=datetime(2024, 1, 1),
     catchup=False,
     tags=['ml', 'retrain'],
@@ -103,4 +120,28 @@ with DAG(
         python_callable=increment_week,
     )
 
-    api_available_task >> prepare_weekly_dataset >> build_features >> trainer_experiment_task >> compare_and_promote_task >> increment_week_task
+    evidently_report_task = PythonOperator(
+        task_id='run_evidently_report',
+        python_callable=call_evidently_report,
+    )
+
+    check_week = BranchPythonOperator(
+        task_id="check_week",
+        python_callable=should_trigger_again,
+    )
+
+    trigger_self = TriggerDagRunOperator(
+        task_id="trigger_self",
+        trigger_dag_id="automatic_retrain",
+        wait_for_completion=False,
+    )
+
+    end_dag = EmptyOperator(
+        task_id="end_dag"
+    )
+
+    # DAG structure
+    api_available_task >> [prepare_weekly_dataset, evidently_report_task]
+    prepare_weekly_dataset >> build_features >> trainer_experiment_task >> compare_and_promote_task >> increment_week_task
+    increment_week_task >> check_week
+    check_week >> [trigger_self, end_dag]
