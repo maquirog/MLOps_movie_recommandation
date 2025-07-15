@@ -56,7 +56,7 @@ def get_first_run_id_by_model_version(model_version, model_name=MODEL_NAME) -> s
     return runs.iloc[0].run_id
 
 
-def predict_evaluate_log_run_champion(latest_champion_run_id, model_version,
+def predict_evaluate_log_run_champion(model_version, dataset_hash,
                                       call_predict_func=predict_func, call_evaluate_func=evaluate_func):
     # Paths
     model_source = os.path.join(MODELS_DIR,"model_champion.pkl")
@@ -90,6 +90,7 @@ def predict_evaluate_log_run_champion(latest_champion_run_id, model_version,
             "model_version": model_version, 
             "alias": "champion", 
             "model_name": MODEL_NAME,
+            "dataset_hash_evaluate":dataset_hash,
             "note": "Re-evaluation on new dataset"})
 
     return new_run_id
@@ -148,6 +149,21 @@ def initialise_git():
     subprocess.run(["git", "config", "--global", "user.email", email], check=True)
     remote_url = f"https://{username}:{token}@github.com/maquirog/MLOps_movie_recommandation.git"
     subprocess.run(["git", "remote", "set-url", "origin", remote_url], check=True)
+    
+def version_dataset_and_get_hash(dataset_path=os.path.join(DATA_DIR, "processed")):
+    if not os.path.exists(dataset_path):
+        raise HTTPException(status_code=404, detail=f"Dossier {dataset_path} introuvable.")
+    subprocess.run(["dvc", "add", dataset_path], check=True)
+    subprocess.run(["git", "add", f"{dataset_path}.dvc"], check=True)
+    subprocess.run(["git", "commit", "-m", "Ajout dataset processed"], check=True)
+    
+    # Récupère le hash DVC du dataset ajouté
+    dvc_file = f"{dataset_path}.dvc"
+    with open(dvc_file, "r") as f:
+        for line in f:
+            if "md5:" in line:
+                return line.strip().split(":")[1].strip()
+    return None
 
 def promote_challenger_to_champ(new_champ_version):
     # Update Alias MLFLow
@@ -167,7 +183,6 @@ def promote_challenger_to_champ(new_champ_version):
         raise HTTPException(status_code=404, detail=f"Fichier {challenger_metrics} introuvable, rien à renommer.")
     
     # DVC add + Git add
-    initialise_git()
     print("Ajout des fichiers au suivi DVC et Git...")
 
     model_dvc_file = "models/model_champion.pkl.dvc"
@@ -175,9 +190,9 @@ def promote_challenger_to_champ(new_champ_version):
     subprocess.run(["git", "add", model_dvc_file, champion_metrics], check=True)
     subprocess.run(["git", "commit", "-m", "Promote new champion model and metrics"], check=True)
     
-    print("Push DVC et Git...")
-    subprocess.run(["dvc", "push"], check=True)
-    subprocess.run(["git", "push", "origin", "HEAD"], check=True)
+    # print("Push DVC et Git...")
+    # subprocess.run(["dvc", "push"], check=True)
+    # subprocess.run(["git", "push", "origin", "HEAD"], check=True)
 
     print("Promotion effectuée avec versionnement DVC/Git.")
 
@@ -192,20 +207,39 @@ if __name__ == "__main__":
         if challenger_version is None:
             raise Exception("Challenger est introuvable, arrêt du script.")
         elif champion_version is None:
+            initialise_git()
+            dataset_hash = version_dataset_and_get_hash()
+            challenger_run_id = get_first_run_id_by_model_version(str(challenger_version))
+            client.set_model_version_tag(
+                name=MODEL_NAME,
+                version=challenger_version,
+                key="dataset_hash",
+                value=dataset_hash
+            )
+            client.set_tag(challenger_run_id, "dataset_hash_train", dataset_hash)
             print("Pas de champion : promouvoir challenger en champion")
             promote_challenger_to_champ(new_champ_version=challenger_version)
+
         else:
             print("Model challenger et champion trouvés, début de la comparaison...")
+            initialise_git()
+            dataset_hash = version_dataset_and_get_hash()
             # Lancer une run du champion sur le nouveau dataset
-            first_champion_run_id = get_first_run_id_by_model_version(str(champion_version))
-            
-            new_run_id_champ = predict_evaluate_log_run_champion(first_champion_run_id, champion_version)
+            new_run_id_champ = predict_evaluate_log_run_champion(champion_version, dataset_hash)
             
             # Récupère la run du challenger
             challenger_run_id = get_first_run_id_by_model_version(str(challenger_version))
+            client.set_tag(challenger_run_id, "dataset_hash_train", dataset_hash)
+            client.set_model_version_tag(
+                name=MODEL_NAME,
+                version=challenger_version,
+                key="dataset_hash",
+                value=dataset_hash
+            )
 
             # Compare les métriques (exemple sur ndcg_10)
             if compare_metrics_mlflow(challenger_run_id, new_run_id_champ, metric_key=METRIC_KEY):
+                initialise_git()
                 print("Promouvoir challenger en champion, champion déprécié")
                 promote_challenger_to_champ(new_champ_version=challenger_version)
             else:
