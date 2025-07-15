@@ -190,9 +190,9 @@ def promote_challenger_to_champ(new_champ_version):
     subprocess.run(["git", "add", model_dvc_file, champion_metrics], check=True)
     subprocess.run(["git", "commit", "-m", "Promote new champion model and metrics"], check=True)
     
-    # print("Push DVC et Git...")
-    # subprocess.run(["dvc", "push"], check=True)
-    # subprocess.run(["git", "push", "origin", "HEAD"], check=True)
+    print("Push DVC et Git...")
+    subprocess.run(["dvc", "push"], check=True)
+    subprocess.run(["git", "push", "origin", "HEAD"], check=True)
 
     print("Promotion effectuée avec versionnement DVC/Git.")
 
