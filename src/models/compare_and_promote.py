@@ -217,6 +217,7 @@ if __name__ == "__main__":
                 value=dataset_hash
             )
             client.set_tag(challenger_run_id, "dataset_hash_train", dataset_hash)
+            client.set_tag(challenger_run_id, "dataset_hash_evaluate", dataset_hash)
             print("Pas de champion : promouvoir challenger en champion")
             promote_challenger_to_champ(new_champ_version=challenger_version)
 
