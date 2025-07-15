@@ -3,9 +3,13 @@ import mlflow
 import pickle
 import json
 import subprocess
+import logging
 from fastapi import HTTPException
 from mlflow.tracking import MlflowClient
 from src.utils.calls import  call_predict_api, call_evaluate_api, call_predict, call_evaluate
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
 
 # === 🌍 Variables d'environnement === #
 API_URL = os.environ.get("API_URL", "http://api:8000")
@@ -18,26 +22,25 @@ METRIC_KEY = os.environ.get("METRIC_KEY", "ndcg_10")
 
 
 METRICS_DIR = os.environ.get("METRICS_DIR", os.path.join(BASE_DIR, "metrics"))
-
-
 USE_API = True
-if USE_API:
-    predict_func = call_predict_api
-    evaluate_func = call_evaluate_api
-else:
-    predict_func = call_predict
-    evaluate_func = call_evaluate
 
+# === API or Local Mode === #
+predict_func = call_predict_api if USE_API else call_predict
+evaluate_func = call_evaluate_api if USE_API else call_evaluate
+    
+# === Setup MLflow === #
 mlflow.set_tracking_uri(TRACKING_URI)
 client = MlflowClient()
+
+# === 🔁 MLflow: Registry & Metrics === #
 
 def get_version_from_alias(model_name: str, alias: str) -> str:
     try:
         mv = client.get_model_version_by_alias(name=model_name, alias=alias)
-        print(f"Le {alias} est {model_name} v{mv.version}")
+        logger.info(f"Alias '{alias}' correspond à la version {mv.version} du modèle '{model_name}'")
         return mv.version
     except Exception as e:
-        print(f"Alias '{alias}' introuvable pour le modèle '{model_name}'.")
+        logger.warning(f"Alias '{alias}' introuvable pour le modèle '{model_name}'.")
         return None
 
     
@@ -51,13 +54,32 @@ def get_first_run_id_by_model_version(model_version, model_name=MODEL_NAME) -> s
         max_results=1
     )  
     if runs.empty:
-        raise ValueError(f"Aucune run trouvée pour model_name={model_name} model_version={model_version}")
-    
+        raise HTTPException(status_code=404, detail=f"Aucune run trouvée pour model_name={model_name} model_version={model_version}")
     return runs.iloc[0].run_id
 
+def get_metrics_from_run(run_id):
+    try:
+        metrics = client.get_run(run_id).data.metrics
+        logger.info(f"Métriques récupérées pour run_id={run_id}: {metrics}")
+        return metrics
+    except Exception as e:
+        raise HTTPException(status_code=404, detail=f"Métriques introuvables pour run_id={run_id}") from e
 
-def predict_evaluate_log_run_champion(latest_champion_run_id, model_version,
-                                      call_predict_func=predict_func, call_evaluate_func=evaluate_func):
+def compare_metrics(challenger_run_id: str, champion_run_id: str, metric_key: str) -> bool:
+    challenger = get_metrics_from_run(challenger_run_id)
+    champion = get_metrics_from_run(champion_run_id)
+
+    if not champion:
+        logger.warning("Aucune métrique pour le champion, promotion automatique du challenger.")
+        return True
+
+    c_val, champ_val = challenger.get(metric_key, 0), champion.get(metric_key, 0)
+    logger.info(f"Comparaison métrique {metric_key} : challenger={c_val} vs champion={champ_val}")
+    return c_val > champ_val
+
+# === 📈 Prédiction & Évaluation === #
+
+def predict_evaluate_log_champion(model_version, dataset_hash):
     # Paths
     model_source = os.path.join(MODELS_DIR,"model_champion.pkl")
     predictions_filename="predictions_champion.json"
@@ -68,12 +90,12 @@ def predict_evaluate_log_run_champion(latest_champion_run_id, model_version,
 
     
     # Prédictions
-    call_predict_func(model_source, output_filename = predictions_filename)
+    predict_func(model_source, output_filename = predictions_filename)
     
     # Nouvelle run pour logguer les performances du champion sur le nouveau dataset
     with mlflow.start_run():
         new_run_id = mlflow.active_run().info.run_id
-        call_evaluate_func(run_id=new_run_id, input_filename=predictions_filename, output_filename = metrics_filename)
+        evaluate_func(run_id=new_run_id, input_filename=predictions_filename, output_filename = metrics_filename)
 
         if not os.path.exists(metrics_filename):
             raise HTTPException(status_code=404, detail=f"Fichier métriques introuvable : {metrics_filename}")
@@ -81,59 +103,28 @@ def predict_evaluate_log_run_champion(latest_champion_run_id, model_version,
         with open(metrics_filename, "r") as f:
             metrics = json.load(f)
             
-        print("\n📊 Recommandation Evaluation Metrics")
-        for key, val in metrics.items():
-            print(f"{key}: {val}")
-
+        logger.info(f"Evaluation metrics du champion : {metrics}")
 
         mlflow.set_tags({
             "model_version": model_version, 
             "alias": "champion", 
             "model_name": MODEL_NAME,
+            "dataset_hash_evaluate":dataset_hash,
             "note": "Re-evaluation on new dataset"})
 
     return new_run_id
     
-def get_metrics_from_run(run_id):
-    try:
-        metrics = client.get_run(run_id).data.metrics
-        print(metrics)
-        return metrics
-    except Exception as e:
-        raise HTTPException(status_code=404, detail=f"Métriques introuvables pour run_id={run_id}") from e
-
-
-def compare_metrics_mlflow(challenger_run_id, champion_run_id, metric_key=METRIC_KEY):
-    challenger_metrics = get_metrics_from_run(challenger_run_id)
-    champion_metrics = get_metrics_from_run(champion_run_id)
-
-    if challenger_metrics is None:
-        raise HTTPException(status_code=404, detail="Pas de métriques challenger trouvées")
-    if champion_metrics is None:
-        print("Pas de métriques champion trouvées")
-        return True  # Promote challenger by default if no champion
-
-    print(f"Challenger {metric_key}: {challenger_metrics.get(metric_key, 0)}")
-    print(f"Champion {metric_key}: {champion_metrics.get(metric_key, 0)}")
-
-    return challenger_metrics.get(metric_key, 0) > champion_metrics.get(metric_key, 0)
 
 def export_champion_model_as_pkl(model_name, champion_version, output_dir=MODELS_DIR):
     model_uri = f"models:/{model_name}/{champion_version}"
-    print(f"Chargement du modèle depuis : {model_uri}")
-
     model = mlflow.sklearn.load_model(model_uri)
-
     os.makedirs(os.path.dirname(output_dir), exist_ok=True)
-    
     output_path = os.path.join(MODELS_DIR, f"model_champion.pkl")
-    
-    # Sauvegarde en .pkl
     with open(output_path, "wb") as f:
         pickle.dump(model, f)
-
     print(f"Modèle exporté en pickle à : {output_path}")
     
+# === 🛠 Git & DVC === #
 def initialise_git():
     username = os.getenv("GITHUB_USERNAME")
     token = os.getenv("GITHUB_TOKEN")
@@ -148,8 +139,32 @@ def initialise_git():
     subprocess.run(["git", "config", "--global", "user.email", email], check=True)
     remote_url = f"https://{username}:{token}@github.com/maquirog/MLOps_movie_recommandation.git"
     subprocess.run(["git", "remote", "set-url", "origin", remote_url], check=True)
+    
+def version_dataset_and_get_hash(dataset_path=os.path.join(DATA_DIR, "processed")):
+    if not os.path.exists(dataset_path):
+        raise HTTPException(status_code=404, detail=f"Dossier {dataset_path} introuvable.")
+    subprocess.run(["dvc", "add", dataset_path], check=True)
+    subprocess.run(["git", "add", f"{dataset_path}.dvc"], check=True)
+    subprocess.run(["git", "commit", "-m", "Ajout dataset processed"], check=True)
+    
+    # Récupère le hash DVC du dataset ajouté
+    dvc_file = f"{dataset_path}.dvc"
+    with open(dvc_file, "r") as f:
+        for line in f:
+            if "md5:" in line:
+                return line.strip().split(":")[1].strip()
+    return None
 
-def promote_challenger_to_champ(new_champ_version):
+
+def log_dataset_hash(version: str, run_id: str, dataset_hash: str):
+    """Ajoute le hash du dataset aux tags MLflow pour traçabilité"""
+    client.set_model_version_tag(MODEL_NAME, version, "dataset_hash", dataset_hash)
+    client.set_tag(run_id, "dataset_hash_train", dataset_hash)
+    client.set_tag(run_id, "dataset_hash_evaluate", dataset_hash)
+
+# === 🚀 Promotion === #
+
+def promote_challenger(new_champ_version):
     # Update Alias MLFLow
     client.set_registered_model_alias(name=MODEL_NAME, alias="champion", version=new_champ_version)
     client.delete_registered_model_alias(name=MODEL_NAME, alias="challenger")
@@ -167,7 +182,6 @@ def promote_challenger_to_champ(new_champ_version):
         raise HTTPException(status_code=404, detail=f"Fichier {challenger_metrics} introuvable, rien à renommer.")
     
     # DVC add + Git add
-    initialise_git()
     print("Ajout des fichiers au suivi DVC et Git...")
 
     model_dvc_file = "models/model_champion.pkl.dvc"
@@ -181,42 +195,50 @@ def promote_challenger_to_champ(new_champ_version):
 
     print("Promotion effectuée avec versionnement DVC/Git.")
 
+def main():
+        # === Récupération des versions === #
+    challenger_version = get_version_from_alias(MODEL_NAME, "challenger")
+    champion_version = get_version_from_alias(MODEL_NAME, "champion")
+    
+    if challenger_version is None:
+        raise HTTPException(status_code=404, detail="Aucun challenger à promouvoir.")
+    
+    # === Initialisation Git/DVC ===
+    initialise_git()
+    dataset_hash = version_dataset_and_get_hash()
+    
+    # === Run ID challenger ===
+    challenger_run_id = get_first_run_id_by_model_version(str(challenger_version))
+    log_dataset_hash(challenger_version, challenger_run_id, dataset_hash)
+    
+    if champion_version is None:
+        logger.info("Aucun champion existant, promotion directe du challenger.")
+        promote_challenger(challenger_version)
+        return True
+    
+    # === Évaluation du champion sur le nouveau dataset === #
+    logger.info("Champion détecté, évaluation en cours...")
+    champion_run_id = predict_evaluate_log_champion(champion_version, dataset_hash)
+    
+    # === Comparaison et décision ===
+    is_better = compare_metrics(challenger_run_id, champion_run_id, METRIC_KEY)
+    if is_better:
+        logger.info("Challenger meilleur, promotion en cours...")
+        promote_challenger(challenger_version)
+        return True
+    else:
+        logger.info("Champion conservé, suppression de l'alias challenger.")
+        client.delete_registered_model_alias(MODEL_NAME, "challenger")
+        return False
+
+
 if __name__ == "__main__":
     try:
-        client = MlflowClient()
-
-        # Récupère les versions actuelles selon alias
-        challenger_version = get_version_from_alias(MODEL_NAME, "challenger")
-        champion_version = get_version_from_alias(MODEL_NAME, "champion")
-        
-        if challenger_version is None:
-            raise Exception("Challenger est introuvable, arrêt du script.")
-        elif champion_version is None:
-            print("Pas de champion : promouvoir challenger en champion")
-            promote_challenger_to_champ(new_champ_version=challenger_version)
-        else:
-            print("Model challenger et champion trouvés, début de la comparaison...")
-            # Lancer une run du champion sur le nouveau dataset
-            first_champion_run_id = get_first_run_id_by_model_version(str(champion_version))
-            
-            new_run_id_champ = predict_evaluate_log_run_champion(first_champion_run_id, champion_version)
-            
-            # Récupère la run du challenger
-            challenger_run_id = get_first_run_id_by_model_version(str(challenger_version))
-
-            # Compare les métriques (exemple sur ndcg_10)
-            if compare_metrics_mlflow(challenger_run_id, new_run_id_champ, metric_key=METRIC_KEY):
-                print("Promouvoir challenger en champion, champion déprécié")
-                promote_challenger_to_champ(new_champ_version=challenger_version)
-            else:
-                print("Champion reste, challenger déprécié")
-                # Supprime l'alias challenger (ou fait ce que tu veux)
-                client.delete_registered_model_alias(name=MODEL_NAME, alias="challenger")
-                #### update possible: suppression du fichier model_challenger.pkl
-    except HTTPException as http_exc:
-        # Dans un contexte API, tu gérerais cette exception en la renvoyant au client
-        print(f"HTTPException levée : {http_exc.detail}")
-        exit(1)
+        promoted = main()
+        logger.info(f"Processus terminé. Promotion effectuée : {promoted}")
+    except HTTPException as e:
+        logger.error(f"Erreur HTTP: {e.detail}")
+        raise
     except Exception as e:
-        print(f"Erreur critique : {str(e)}")
-        exit(1)
+        logger.error(f"Erreur critique : {str(e)}")
+        raise
