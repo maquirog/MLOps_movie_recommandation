@@ -5,7 +5,7 @@ import os
 API_URL = os.environ.get("API_URL","http://localhost:8000")
 API_KEY = os.environ.get("API_KEY","my_secret_api_key")
 HEADERS = {"x-api-key": API_KEY}
-
+ 
 def print_api_logs(resp, step_name=""):
     print(f"\n=== API STEP: {step_name} ===")
     print(f"Status code: {resp.status_code}")
