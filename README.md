@@ -1,93 +1,99 @@
-Project Name
-==============================
+# MLOps Movie Recommendation
 
-This project is a starting Pack for MLOps projects based on the subject "movie_recommandation". It's not perfect so feel free to make some modifications on it.
+This project provides a complete MLOps pipeline for a movie recommendation system, leveraging modern tools such as Docker, Airflow, MLflow, Grafana, Prometheus, and Evidently.
 
-Project Organization
-------------
+## Prerequisites
 
-    ├── LICENSE
-    ├── README.md          <- The top-level README for developers using this project.
-    ├── data
-    │   ├── external       <- Data from third party sources.
-    │   ├── interim        <- Intermediate data that has been transformed.
-    │   ├── processed      <- The final, canonical data sets for modeling.
-    │   └── raw            <- The original, immutable data dump.
-    │
-    ├── logs               <- Logs from training and predicting
-    │
-    ├── models             <- Trained and serialized models, model predictions, or model summaries
-    │
-    ├── notebooks          <- Jupyter notebooks. Naming convention is a number (for ordering),
-    │                         the creator's initials, and a short `-` delimited description, e.g.
-    │                         `1.0-jqp-initial-data-exploration`.
-    │
-    ├── references         <- Data dictionaries, manuals, and all other explanatory materials.
-    │
-    ├── reports            <- Generated analysis as HTML, PDF, LaTeX, etc.
-    │   └── figures        <- Generated graphics and figures to be used in reporting
-    │
-    ├── requirements.txt   <- The requirements file for reproducing the analysis environment, e.g.
-    │                         generated with `pip freeze > requirements.txt`
-    │
-    ├── src                <- Source code for use in this project.
-    │   ├── __init__.py    <- Makes src a Python module
-    │   │
-    │   ├── data           <- Scripts to download or generate data
-    │   │   ├── check_structure.py    
-    │   │   ├── import_raw_data.py 
-    │   │   └── make_dataset.py
-    │   │
-    │   ├── features       <- Scripts to turn raw data into features for modeling
-    │   │   └── build_features.py
-    │   │
-    │   ├── models         <- Scripts to train models and then use trained models to make
-    │   │   │                 predictions
-    │   │   ├── predict_model.py
-    │   │   └── train_model.py
-    │   │
-    │   ├── visualization  <- Scripts to create exploratory and results oriented visualizations
-    │   │   └── visualize.py
-    │   └── config         <- Describe the parameters used in train_model.py and predict_model.py
+Before running the project, please ensure the following steps are completed:
 
---------
+### 1. Create a `.env.local` file in the project root
 
-## Steps to follow 
+This file must contain the following environment variables, adjusted to your environment:
 
-Convention : All python scripts must be run from the root specifying the relative file path.
+```env
+HOST_PROJECT_PATH=repo path in your local environment
+GITHUB_USERNAME=your_github_username
+GITHUB_EMAIL=your_github_email
+GITHUB_TOKEN=your_github_token
+AWS_ACCESS_KEY_ID=your_dagshub_access_key_id
+AWS_SECRET_ACCESS_KEY=your_dagshub_secret_access_key
+AIRFLOW_UID=1000
+AIRFLOW_GID=0
+DOCKER_GID=$(getent group docker | cut -d: -f3)
+API_URL=http://api:8000
+API_KEY=your_api_key
+```
 
-### 1- Create a virtual environment using Virtualenv.
+- **HOST_PROJECT_PATH**: The absolute path to your cloned repository (e.g., `/home/ubuntu/MLOps_movie_recommandation`).
+- **DOCKER_GID**: You can obtain your Docker group id by running `getent group docker | cut -d: -f3` in your terminal.
+- **API_KEY**: **You must request this from the project administrators.**
 
-    `python -m venv my_env`
+> **Important:**  
+> - Replace all placeholder values (`your_*`) with your actual credentials.
+> - Replace `your_dagshub_access_key_id` and `your_dagshub_secret_access_key` with your Dagshub credentials.
+> - To obtain the API key, please **request it from the project administrators**.
+> - You **must also ask the repository administrators for read/write access to this repository** in order for the project to work fully.
 
-###   Activate it 
+### 2. Run the Initialization Script
 
-    `./my_env/Scripts/activate`
+From the project root, execute:
 
-###   Install the packages from requirements.txt  (You can ignore the warning with "setup.py")
+```bash
+bash src/init.sh
+```
 
-    `pip install -r .\requirements.txt`
+This script will:
+- Check for the `.env.local` file
+- Set up the required Docker network
+- Build Docker images
+- Start all necessary services:
+  - Data import service
+  - API (FastAPI)
+  - MySQL
+  - MLflow server
+  - Evidently
+  - Prometheus
+  - Grafana
+- Optionally launch Airflow (you will be prompted)
 
-### 2- Execute import_raw_data.py to import the 4 datasets (say yes when it asks you to create a new folder)
+## Services and Interfaces
 
-    `python .\src\data\import_raw_data.py` 
+Once initialized, you can access the following interfaces:
 
-### 3- Execute make_dataset.py initializing `./data/raw` as input file path and `./data/processed` as output file path.
+| Service       | URL                            | Notes                        |
+|---------------|------------------------------- |-----------------------------|
+| API           | http://localhost:8000/health   | FastAPI health endpoint      |
+| MLflow        | http://localhost:5050          | ML experiment tracking       |
+| Grafana       | http://localhost:3000          | Dashboards and monitoring    |
+| Prometheus    | http://localhost:9090          | Metrics scraping             |
+| Airflow       | http://localhost:8080          | Orchestration (login: airflow / password: airflow) |
 
-    `python .\src\data\make_dataset.py`
+## Project Structure
 
-### 4- Execute build_features.py to preprocess the data (this can take a while)
+```
+.
+├── src/
+│   └── init.sh        # Initialization script (see above)
+├── .env.local         # Environment variables (must create)
+├── docker-compose.yml
+├── docker-compose.airflow.yml
+├── ...                # Other source files
+```
 
-    `python .\src\features\build_features.py`
+## Troubleshooting
 
-### 5- Execute train_model.py to train the model
+- If any service does not start, review the logs printed by `init.sh`.
+- Ensure Docker is installed and running on your machine.
+- Verify all required environment variables are set properly.
+- For Airflow, if you choose not to start it during initialization, you can always start it manually using:
+  ```bash
+  docker-compose --env-file .env.local -f docker-compose.airflow.yml up -d
+  ```
 
-    `python .\src\models\train_model.py`
+## License
 
-### 5- Finally, execute predict_model.py file to make the predictions (by default you will be printed predictions for the first 5 users of the dataset). 
+This project is provided under the MIT License.
 
-    `python .\src\models\predict_model.py`
+---
 
-### Note that we have 10 recommandations per user
-
-<p><small>Project based on the <a target="_blank" href="https://drivendata.github.io/cookiecutter-data-science/">cookiecutter data science project template</a>. #cookiecutterdatascience</small></p>
+Feel free to contribute or open issues for questions and improvements!
