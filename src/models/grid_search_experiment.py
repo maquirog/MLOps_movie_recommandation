@@ -55,13 +55,13 @@ def train_predict_evaluate_log_run(hyperparams, experiment_id,
         print(f"🔮🔮 grid search expID: {experiment_id} & run ID:{run_id}🔮🔮", flush=True)
     
         # Paths
-        model_source = os.path.join(MODELS_DIR, f"model_{run_id}.pkl")
+        model = f"model_{run_id}.pkl"
         predictions_filename = f"predictions_{run_id}.json"
         metrics_filename = os.path.join(METRICS_DIR, f"scores_{run_id}.json")
         
         # === Pipeline calls === #
         call_train_func(hyperparams, run_id)
-        call_predict_func(model_source, output_filename = predictions_filename)
+        call_predict_func(model, output_filename = predictions_filename)
         call_evaluate_func(run_id=run_id, input_filename = predictions_filename, output_filename = metrics_filename)
         
         with open(metrics_filename, "r") as f:

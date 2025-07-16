@@ -81,7 +81,8 @@ def compare_metrics(challenger_run_id: str, champion_run_id: str, metric_key: st
 
 def predict_evaluate_log_champion(model_version, dataset_hash):
     # Paths
-    model_source = os.path.join(MODELS_DIR,"model_champion.pkl")
+    model="model_champion.pkl"
+    model_source = os.path.join(MODELS_DIR,model)
     predictions_filename="predictions_champion.json"
     metrics_filename = os.path.join(METRICS_DIR, f"champion_scores.json")
     
@@ -90,7 +91,7 @@ def predict_evaluate_log_champion(model_version, dataset_hash):
 
     
     # Prédictions
-    predict_func(model_source, output_filename = predictions_filename)
+    predict_func(model, output_filename = predictions_filename)
     
     # Nouvelle run pour logguer les performances du champion sur le nouveau dataset
     with mlflow.start_run():
