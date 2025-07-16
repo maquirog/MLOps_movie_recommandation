@@ -36,7 +36,41 @@ docker-compose up -d \
     prometheus \
     grafana
 
-# Étape 4: Check des services
+# Étape 4.1: Attente de la fin du container import_raw_data
+echo "⏳ Attente de la fin du container 'import_raw_data'..."
+CONTAINER_ID=$(docker-compose ps -q import_raw_data)
+MAX_RETRIES=30       
+WAIT_SECONDS=10
+
+
+for i in $(seq 1 $MAX_RETRIES); do
+    STATUS=$(docker inspect -f '{{.State.Status}}' "$CONTAINER_ID")
+    EXIT_CODE=$(docker inspect -f '{{.State.ExitCode}}' "$CONTAINER_ID")
+
+        if [ "$STATUS" == "exited" ]; then
+          if [ "$EXIT_CODE" == "0" ]; then
+              echo "✅ Container 'import_raw_data' terminé avec succès (exit 0)"
+              break
+          else
+              echo "❌ Container 'import_raw_data' terminé avec une erreur (exit $EXIT_CODE)"
+              echo "🪵 Logs du container :"
+              docker logs "$CONTAINER_ID"
+              exit 1
+          fi
+        else
+        echo "⏳ Tentative $i/$MAX_RETRIES : toujours en cours... (status: $STATUS)"
+        sleep $WAIT_SECONDS
+    fi
+done
+
+# Si après la boucle on n'est toujours pas sortis, c’est un échec
+FINAL_STATUS=$(docker inspect -f '{{.State.Status}}' "$CONTAINER_ID")
+if [ "$FINAL_STATUS" != "exited" ]; then
+    echo "❌ Timeout : le container 'import_raw_data' ne s'est pas terminé après $((MAX_RETRIES * WAIT_SECONDS)) secondes."
+    exit 1
+fi
+
+# Étape 4.2: Check des services
 check_service() {
   local name=$1
   local url=$2

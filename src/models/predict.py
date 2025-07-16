@@ -10,6 +10,7 @@ import mlflow
 BASE_DIR = os.environ.get("BASE_DIR", os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 METRICS_DIR= os.environ.get("METRICS_DIR", os.path.join(BASE_DIR, "metrics"))
 DATA_DIR= os.environ.get("DATA_DIR", os.path.join(BASE_DIR, "data"))
+MODELS_DIR= os.environ.get("MODELS_DIR", os.path.join(BASE_DIR, "models"))
 PREDICTIONS_DIR= os.environ.get("PREDICTIONS_DIR", os.path.join(BASE_DIR, "predictions"))
 MLFLOW_TRACKING_URI = os.environ.get("MLFLOW_TRACKING_URI", "http://mlflow-server:5050")
 
@@ -42,7 +43,7 @@ def load_model_from_source(model_source: str, registry=False, alias=None):
         Loaded model.
     """
     if model_source.endswith(".pkl"):
-        with open(model_source, "rb") as f:
+        with open(os.path.join(MODELS_DIR, model_source), "rb") as f:
             model = pickle.load(f)
         return model
     
@@ -113,7 +114,7 @@ if __name__ == "__main__":
         users_id = list(map(int, args.user_ids.split(",")))
     else:
         # Default behavior: load all users
-        user_matrix_path = os.path.join(BASE_DIR, "data", "processed", "user_matrix.csv")
+        user_matrix_path = os.path.join(DATA_DIR, "processed", "user_matrix.csv")
         print(f"⚙️ Loading all user IDs from {user_matrix_path}...")
         all_users = pd.read_csv(user_matrix_path)
         users_id = all_users["userId"].tolist()
@@ -127,5 +128,5 @@ if __name__ == "__main__":
     
     # Save predictions to file by default unless --no_save_to_file is provided
     if not args.no_save_to_file:
-        predictions_path = os.path.join(PREDICTIONS_DIR,args.output_filename)
+        predictions_path = os.path.join(PREDICTIONS_DIR, args.output_filename)
         save_predictions_to_file(predictions, predictions_path)
