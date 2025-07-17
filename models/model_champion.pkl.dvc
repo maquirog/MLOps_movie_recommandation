@@ -1,5 +1,5 @@
 outs:
-- md5: d3d3b4f2912facd9cdb48eae1631015d
-  size: 9145026
+- md5: 327a23020a30818b4625136a0a3f8bd9
+  size: 9145027
   hash: md5
   path: model_champion.pkl
